@@ -1,4 +1,5 @@
 # Spring-Study
+- 참석자 : Limjingyu kksshh525
 - 만나는 날 : 월요일 (변경 가능)
 - 커리큘럼 : https://www.inflearn.com/roadmaps/8
 - 진행 방법 : 강의 2시간 30분 기준 1주일, 돌아가면서 발표, 발표자는 스터디 후 상대에게 설명(물론 그 상대도 공부해와야함) & 각자 이해한 바가 다르면 논의
