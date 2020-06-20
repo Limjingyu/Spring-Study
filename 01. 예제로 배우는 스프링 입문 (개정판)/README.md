@@ -1,7 +1,22 @@
-# Spring-Study
-- 참석자 : Limjingyu kksshh525
-- 만나는 날 : 월요일 (변경 가능)
-- 커리큘럼 : https://www.inflearn.com/roadmaps/8
-- 진행 방법 : 강의 2시간 30분 기준 1주일, 돌아가면서 발표, 발표자는 스터디 후 상대에게 설명(물론 그 상대도 공부해와야함) & 각자 이해한 바가 다르면 논의
-- 스터디 카페 : 
-- 시간 : 7시 만나서 저녁 식사 후 시작
+# 01. 예제로 배우는 스프링 입문 (개정판)
+
+## 섹션 1. 스프링 예제 프로젝트 PetClinic
+## 섹션 2. 스프링 IoC
+## 섹션 3. 스프링 AOP
+## 섹션 4. 스프링 PSA
+
+#### 참고
+* 메이븐(Maven)은 알고 스프링(Spring)을 쓰는가?
+  * 출처: https://jeong-pro.tistory.com/168 [기본기를 쌓는 정아마추어 코딩블로그]
+* [Spring] 스프링 프레임워크(Spring Framework)란?
+  * 출처: https://engkimbs.tistory.com/601?category=767795 [새로비]
+* 키워드
+```
+- application context / Bean Factory
+- @SpringBootApplication @ConponentScan
+- IoC 싱글톤
+- DI 생성자/필드/setter @Autowired/@inject
+- @Component : Repository/Service/Controller/Configuration
+- AOP 프록시패턴 어노테이션만들기
+- PSA(Portable Service Abstraction) 
+```
