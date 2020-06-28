@@ -77,14 +77,40 @@
 * messagess.properties / messagess_ko_kr.properties / ..
 
 ### IoC 컨테이너 8부: ApplicationEventPublisher
+* 이벤트 프로그래밍에 필요한 인터페이스 제공. 옵저버 패턴 구현체.
 * @EventListener
 * @Async @EnableAsync
 * 옵저버 패턴 찾아보기
+* 스프링이 제공하는 기본 이벤트
+  * ContextRefreshedEvent: ApplicationContext를 초기화 했더나 리프래시 했을 때 발생.
+  * ContextStartedEvent: ApplicationContext를 start()하여 라이프사이클 빈들이 시작
+신호를 받은 시점에 발생.
+  * ContextStoppedEvent: ApplicationContext를 stop()하여 라이프사이클 빈들이 정지
+신호를 받은 시점에 발생.
+  * ContextClosedEvent: ApplicationContext를 close()하여 싱글톤 빈 소멸되는 시점에
+발생.
+  * RequestHandledEvent: HTTP 요청을 처리했을 때 발생.
+  
 ### IoC 컨테이너 9부: ResourceLoader
-ㅎ
+* 리소스를 읽어오는 기능을 제공하는 인터페이스
+* 리소스 읽어오기
+  * 파일 시스템에서 읽어오기
+  * 클래스패스에서 읽어오기
+  * URL로 읽어오기
+  * 상대/절대 경로로 읽어오기
 
 ## 섹션 2. Resource / Validation
 ### Resource 추상화
-ㅎ
+* 구현체
+  * UrlResource: java.net.URL 참고, 기본으로 지원하는 프로토콜 http, https, ftp, file, jar.
+  * ClassPathResource: 지원하는 접두어 classpath:
+  * FileSystemResource
+  * ServletContextResource: 웹 애플리케이션 루트에서 상대 경로로 리소스 찾는다.
+  * ...
+* 주요 메소드
+  * getInputStream()
+  * exitst()
+  * isOpen()
+  * getDescription(): 전체 경로 포함한 파일 이름 또는 실제 URL
 
 ### Validation 추상화
