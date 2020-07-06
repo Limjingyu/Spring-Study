@@ -114,7 +114,49 @@
   * getDescription(): 전체 경로 포함한 파일 이름 또는 실제 URL
 
 ### Validation 추상화
-
+* 애플리케이션에서 사용하는 객체 검증용 인터페이스
+		* Spring MVC에서 주로 사용되지만 다른 레이어에서도 사용 가능한 일반적인 인터페이스
+		* Bean Validation (https://docs/jboss.org/hibernate/beanvalidation/spec/2.0/api)
+	* Validator 만들기
+		* Spring에 들어있는 패키지 가져올 것
+		* support : 인자로 넘어오는 클래스가 검증하고자 하는 클래스인지 확인하도록 구현
+		* validate : 검증 로직 구현
+			 * ValidationUtils를 이용한 예제
+				public class EventValidator implements Validator {
+					@Override
+					public boolean supports(Class<?> clazz) {
+						return Event.class.equals(clazz);
+					}
+					@Override
+					public void validate(Object target, Errors errors) {
+						ValidationUtils.rejectIfEmptyOrWhitespace(errors, "title", "Default error msg");
+					}
+				}
+		 	 * title 필드가 empty/whitespace면 errors에 에러를 담아준다.
+			  * ValidationUtils를 이용하지 않는 예제
+			@Override
+			public void validate (Object target, Errors errors) {
+				Event event = (Event) target;
+				if (event.getTitle() == null) {
+					errors.reject(String errorCode, object[] errorArgs, String defaultMessage);
+				}
+			}
+* 최근에는 Validator를 직접 만들지 않고, spring boot를 사용한다면 LocalValidatorFactoryBean(스프링 2.0.5 이상부터 빈으로 자동 등록, 스프링이 제공)을 사용할 수 있다. 
+		* 지금껏 사용해오던 방식인데, validation을 할 클래스의 필드에 @NotEmpty/@Size/@Min/@Max/@Email 등등을 달아주기만 하면 위에서 처럼 Validator를 구현한 EventValidator를 사용하지 않고도 간단한 검증 로직은 만들어 낼 수 있다.
+		* 더 복잡한 validation은 직접 구현해야 한다
+		@Component
+		public class AppRunner implements ApplicationRunner {
+			@Autowired
+			Validator validator; // 위에서 설명한 Spring이 제공하는 Validator.
+			
+			public void run(ApplicationArguments args) throws Exception {
+				Event event = new Event();
+				Errors errors = new BeanPropertyBindingResult(event, "event"); // 직접 사용할 일은 없다
+				validator.validate(event, errors);
+				 // event에 @NotNull등과 같은 validation 어노테이션을 달아두었고, errors.hasErrors()가 true를 리턴한다. 
+			}
+		}
+ 
 
 
 --- 
