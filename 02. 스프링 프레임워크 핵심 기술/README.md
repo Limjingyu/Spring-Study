@@ -122,6 +122,7 @@
 		* support : 인자로 넘어오는 클래스가 검증하고자 하는 클래스인지 확인하도록 구현
 		* validate : 검증 로직 구현
 			 * ValidationUtils를 이용한 예제
+```java
 				public class EventValidator implements Validator {
 					@Override
 					public boolean supports(Class<?> clazz) {
@@ -132,8 +133,10 @@
 						ValidationUtils.rejectIfEmptyOrWhitespace(errors, "title", "Default error msg");
 					}
 				}
+```
 		 	 * title 필드가 empty/whitespace면 errors에 에러를 담아준다.
 			  * ValidationUtils를 이용하지 않는 예제
+```java
 			@Override
 			public void validate (Object target, Errors errors) {
 				Event event = (Event) target;
@@ -141,6 +144,7 @@
 					errors.reject(String errorCode, object[] errorArgs, String defaultMessage);
 				}
 			}
+```
 * 최근에는 Validator를 직접 만들지 않고, spring boot를 사용한다면 LocalValidatorFactoryBean(스프링 2.0.5 이상부터 빈으로 자동 등록, 스프링이 제공)을 사용할 수 있다. 
 		* 지금껏 사용해오던 방식인데, validation을 할 클래스의 필드에 @NotEmpty/@Size/@Min/@Max/@Email 등등을 달아주기만 하면 위에서 처럼 Validator를 구현한 EventValidator를 사용하지 않고도 간단한 검증 로직은 만들어 낼 수 있다.
 		* 더 복잡한 validation은 직접 구현해야 한다
