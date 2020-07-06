@@ -157,6 +157,289 @@
 			}
 		}
  
+## 섹션 3. 데이터 바인딩
+### 데이터 바인딩 추상화 : PropertyEditor
+* 기술적 관점 : 프로퍼티 값을 타겟 객체에 설정하는 기능
+* 사용자 관점 : 사용자 입력값을 애플리케이션 도메인 모델에 동적으로 변환하여 넣어주는 기능
+  * 주로 사용자가 입력하는 값은 문자열이고(api에서 요청으로 오는 값을 생각해보면 대부분 문자열로 받으니까), 이걸 객체화 해주기 위해 사용한다. 이를 데이터 바인딩이라 한다
+  * DataBinding interface는 오래전에 만들어졌고, SpEL이나 xml->bean 생성 하는 등의 스프링 내부 구현에서도 사용된다. 주로 Spring MVC에서 사용하지만 여기에만 특화된 것은 아니다
+* 즉, 입력값은 대부분 문자열인데, 그 값을 객체가 가지고 있는 int, long, boolean, date나, 또한 Event, Book 같은 도메인 타입으로도 변환해서 넣어주는 기능
+
+### PropertyEditor
+* org.springfamework.validation.DataBinder
+* 스프링 3.0 이전까지 DataBinder가 변환 작업에 사용하던 인터페이스
+* 단점
+  * thread-safe하지 않음 (상태 정보를 저장하고 있어서 싱글톤 빈으로 등록해서 쓰면 문제)
+  * Object와 String 간의 변환만 할 수 있어, 사용 범위가 제한적임 (그런 경우가 대부분이라 조심히 사용해야 함)
+```java
+	public class EventPropertyEditor extends PropertyEditorSupport {
+	        // Object to String
+	        @Override
+	        public String getAsTest() {
+	                return ((event)getValue()).getTitle();
+	        }
+	        // String to Object
+	        @Override
+	        public void setAsTest(String text) throws IlligalArgumentException {
+	                int id = Integer.parseInt(text);
+	                Event event = new Event();
+	                event.setId(id);
+	                setValue(event);
+	        }
+	}
+	
+	// Controller
+	@InitBinder
+	public void init(WebDataBinderwebDataBinder){
+	        webDataBinder.registerCustomEditor(Event.class, new EventPropertyEditor());
+	}
+	
+	@GetMapping("/event/{event}")
+	public String getEvent(@PathVariable Eventevent) {
+	        ...
+	}
+```
+### Converter와 Formatter
+* PropertyEditor의 단점을 보완 
+* Converter
+  * S 타입을 T타입으로 변환할 수 있는 매우 일반적인 변환기
+  * 상태정보 없음 == Stateless == thread-safe // bean으로 생성하여 사용 가능
+  * ConverterRegistery에 등록해서 사용
+```java
+		import org.springframework.core.convert.converter.Converter;
+		
+		public class EventConverter {
+		    public static class StringToEventConverter implements Converter<String, Event> {
+		        @Override
+		        public Event convert(String source) {
+		            return new Event(Integer.parseInt(source));
+		        }
+		    }
+		
+		    public static class EventToStringConverter implements Converter<Event, String> {
+		        @Override
+		        public String convert(Event source) {
+		            return source.getId().toString();
+		        }
+		    }
+		}
+		
+		//ConverterRegistry에 등록하기
+		@Configuration
+		public class WebConfig implements WebMvcConfigure {
+		    @Override
+		    public void addFormatters(FormatterRegistry registry) {
+		        registry.addConverter(new EventConverter.StringToEventConverter());
+		    }
+		}
+```
+* Formatter
+  * PropertyEditor 대체제
+  * thread-safe
+  * Object와 String 간의 변환을 담당
+  * 문자열을 Locale에 따라 다국화 하는 기능도 제공(optional)
+  * FormatterRegistry에 등록해서 사용
+```java
+		public class EventFormatter implements Formatter<Event> {
+		        @Override
+		        public Event parse(String text, Locale locale) throws ParseException {
+		                Event event = new Event();
+		                int id = Integer.parseInt(text);
+		                event.setId(id);
+		                return event;
+		        }
+		        @Override
+		        public String print(Event obj, Locale, locale) {
+		                return obj.getId().toString();
+		        }
+		}
+		//FormatterRegistry에 등록하기
+		@Configuration
+		public class WebConfig implements WebMvcConfigure {
+		    @Override
+		    public void addFormatters(FormatterRegistry registry) {
+		        registry.addFormatter(newEventFormatter());
+		    }
+		}
+```
+* ConversionService
+  * 위의 작업들이 ConversionService(interface)에 등록을 하는 과정
+  * Spring MVC, SpEL에서 사용
+  * DefaultFormatterConversionService
+    * Spring boot에서 제공
+    * 여러 기본 컨버터와 포매터를 등록
+    * FormatterRegistry와 ConversionService를 둘 다 구현하여 기능을 제공한다
+
+  * 등록되어 있는 converter들을 전부 보는 방법
+```java
+			@Autowired
+			ConversionService conversionService;
+			public void run(ApplicationArguments args) {
+			        System.out.println(conversionService);
+			}
+```
+  * (참고) test에서 @WebMvcTest 를 사용할 때 주로 controller를 테스트 하게 되는데, 이 때converter/formatter를 명시해주어야 테스트가 깨지지 않는다. ex. @WebMvcTest({EventFormatter.class})
+  *(참고) JPA에서 사용되는 Entity는 converter를 내장하고 있다.
+
+## 섹션 4. SpEL
+* SpEL이란
+  * 객체 그래프 조회를 조회하고 조작하는 기능을 제공
+    * Unified EL과 비슷하지만 메소드 호출을 지원하고, 문자역 템플릿 기능도 제공
+    * OGNL, MVEL, JBOss EL 등 자바에서 사용할 수 있는 여러 EL이 있지만, SpEL은 모든 스프링 프로젝트 전반에 걸쳐 사용할 EL로 만들었다
+    * 스프링 3.0부터 지원
+* SpEL 구성
+```java
+ExpressionParser parser = new SpelExpressionParser();
+Expression expression = parser.parseExpression("2 + 100"); // 인자는 expression
+Integer value = expression.getValue(Integer.class); // 내부적으로 ConversionService를 이용 함
+System.out.println(value);
+```
+* 문법
+  * #("표현식")
+  * $("프로퍼티")
+  * 표현식은 프로퍼티를 가질 수 있지만 반대는 불가
+    * #{${my.data} + 1}
+  * reference, 다양한 문법 제공
+    * 설정 파일에 있는 bean을 받아올 수 있다
+    * function 호출 가능
+* 실제 사용처
+  * @Value annotation
+    * 예제
+```java
+@Value("#{1 + 1}")
+int value;
+@Value("#{'hello' + 'world'}")
+String greeting;
+@Value("#{1 eq 1}")
+boolean trueOrFalse;
+```
+  * @ConditionalOnExpression annotation
+    * 선택적으로 빈을 등록하거나 설정파일을 읽어들일 때 사용. SpEL을 이용하여 조건을 만들어낼 수 있다
+  * 스프링 시큐리티
+    * 메소드 시큐리티 : @PreAuthorize, @PostAuthorize, @PreFilter, @PostFilter
+    * XML 인터셉터 URL 설정
+    * ...
+  * 스프링 데이터
+    * @Query annotation
+      * 함수의 인자를 받아올 때 사용
+      * @Query("SELECT u FROM User u where u.firstname = :#{#customer.firstname}")
+  * Thymeleaf
+  * ...	
+
+## 섹션 5. 스프링 AOP
+### Spring AOP
+* Aspected-oriented Programming은 OOP를 보완하는 수단, Aspect를 모듈화 할 수 있는 프로그래밍 기법
+* 흩어진 관심사 (Crosscutting Concerns)
+  * 비슷한 함수/기능들이 여러 클래스에 걸쳐서 나타나는 상태
+    * 예시 : db transaction, logging 등	
+* AOP 주요 개념
+  * Aspect(모듈)와 Target(적용이 되는 대상)
+  * Advice(해야할 일)
+  * Join point(합류 지점, 적용 시점이 될 수 있는 모든 대상들(메소드 실행 직전/에러를 던질 때 등))와 Pointcut(어디에 적용해야 하는지)
+* AOP 구현체
+  * 자바
+    * AspectJ
+    * Spring AOP
+* AOP 적용 방법 (weaving)
+  * 컴파일
+  * 로드
+  * 런타임 
+
+### Proxy 기반 AOP
+* Spring AOP 특징
+  * Proxy 기반의 AOP 구현체
+  * Spring bean에만 AOP를 적용 가능
+  * 모든 AOP기능을 제공하는 것은 아니고, Spring IoC와 연동하여 엔터프라이즈 애플리케이션에서 가장 흔한 문제에 대한 해결책을 제공하는 것이 목적
+* Proxy pattern
+  * 기존 코드 변경 없이 접근 제어 또는 부가 기능 추가
+		
+  * 문제점
+    * 매번 proxy class 작성 필요
+    * 여러 클래스 여러 메소드에 적용하려면
+    * 객체들 관계가 어렵고 복잡
+* 위의 문제를 해결하기 위하여 등장
+  * Spring IoC container가 제공하는 기반 시설 + Dynamic proxy를 사용하여 여러 복잡한 문제를 해결
+  * 동적 프록시 : 동적으로 프록시 객체를 생성하는 방법
+    * 자바가 제공하는 방법은 인터페이스 기반 프록시 생성
+    * CGlib은 클래스 기반 프로시도 지원
+  * Spring IoC : 기존 빈을 대체하는 동적 프록시 빈을 만들어 등록
+    * 클라이언트 코드 변경 없음
+    * AbstractAutoProxyCreator implements BeanPostProcessor
+* (참고) spring boot application을 web으로 띄우지 않는 방법
+```java
+		public static void main(String[] args) {
+		        SpringApplication app = new SpringApplication(DemoApp.class);
+		        app.setWebApplicationType(WebApplicationType.NONE); // now this application doesn't start with spring web MVC
+		        app.run(args);
+		}
+```
+
+### @AOP
+* annotation 기반의 spring @AOP
+* 의존성 추가
+  * artifactId : spring-boot-starter-aop
+* aspect 정의
+  * @Aspect
+  * 빈으로 등록해야 하니 @Component도 추가 (ComponentScan을 이용한다면)
+* pointcut 정의
+  * @Pointcut("표현식")
+  * 주요 표현식
+    * Execution
+				@Around("execution com.suhyeon.**.*(..)")
+    * @Annotation
+```java
+				@Around("@annotation(PerfLogging)")
+				public Object logPerf(ProceedingJoinPoint pjp) throws Throwable {
+				    long begin = System.currentTimeMillis();
+				    Object ret = pjp.proceed();
+				System.out.println(System.currentTimeMillis() - begin);
+				    return ret;
+				}
+```
+
+    * bean
+  * 포인트컷 조합
+			§ &&, ||, !
+* advice 정의
+  * @Before
+  * @AfterReturning
+  * @AfterThrowing
+  * @Around
+* (참고) annotation 만들기
+  * RetentionPolicy
+    * CLASS : default, 이 레벨로 주어야 바이트 코드까지 유지가 된다
+    * SOURCE : 컴파일 후에 사라지게 된다.
+    * RUNTIME : 여기까진 설정하지 않아도 된다
+```java
+		@Documented // For documentation
+		@Target(ElementType.METHOD)
+		@Retention(RetentionPolicy.CLASS)
+		public @interface PerfLogging {
+		}
+```
+
+## 섹션 6. Null-Safety
+* Spring framework 5에 추가된 Null 관련 어노테이션
+  * @NonNull
+  * @Nullable
+  * @NonNullApi (package level설정)
+   아래와 같이 설정하면 패키지 하위의 모든 클래스에서 @NonNull을 적용한 것과 같이 설정이 된다. 해당 패키지 하위에서 null을 허용하려면 @Nullable을 달아주어야 한다
+
+```java
+@NonNullApi
+pakcage com.suhyeon.spring;
+...
+```
+  * @NonNullFields (package level설정)
+
+* 목적
+  * (툴의 지원을 받아) 컴파일 시점에 최대한 NPE를 방지
+* 설정하는 방법
+  a. intellij 설정에서 다음 항목을 선택		
+  b. spring의 nonnull annotation은 기본으로 안보이니 아래 박스에서 +를 누름
+  c. nonnull을 검색하여 추가		
+  d. 그 결과 리턴값이 NonNull인데 null을 반환하려 한다는 메세지를 보여준다
+		
 
 
 --- 
