@@ -339,8 +339,8 @@ boolean trueOrFalse;
     * 예시 : db transaction, logging 등	
 * AOP 주요 개념
   * Aspect(모듈)와 Target(적용이 되는 대상)
-  * Advice(해야할 일)
-  * Join point(합류 지점, 적용 시점이 될 수 있는 모든 대상들(메소드 실행 직전/에러를 던질 때 등))와 Pointcut(어디에 적용해야 하는지)
+  * Advice(동작 시점)
+  * Join point(합류 지점, 적용 시점이 될 수 있는 모든 대상들)와 Pointcut(어디에 적용해야 하는지)
 * AOP 구현체
   * 자바
     * AspectJ
