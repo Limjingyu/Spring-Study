@@ -144,6 +144,7 @@
 * 최근에는 Validator를 직접 만들지 않고, spring boot를 사용한다면 LocalValidatorFactoryBean(스프링 2.0.5 이상부터 빈으로 자동 등록, 스프링이 제공)을 사용할 수 있다. 
 		* 지금껏 사용해오던 방식인데, validation을 할 클래스의 필드에 @NotEmpty/@Size/@Min/@Max/@Email 등등을 달아주기만 하면 위에서 처럼 Validator를 구현한 EventValidator를 사용하지 않고도 간단한 검증 로직은 만들어 낼 수 있다.
 		* 더 복잡한 validation은 직접 구현해야 한다
+```java
 		@Component
 		public class AppRunner implements ApplicationRunner {
 			@Autowired
@@ -156,7 +157,7 @@
 				 // event에 @NotNull등과 같은 validation 어노테이션을 달아두었고, errors.hasErrors()가 true를 리턴한다. 
 			}
 		}
- 
+ ```
 ## 섹션 3. 데이터 바인딩
 ### 데이터 바인딩 추상화 : PropertyEditor
 * 기술적 관점 : 프로퍼티 값을 타겟 객체에 설정하는 기능
