@@ -102,13 +102,92 @@
 	* but, 모든 애들이 빈으로 등록되는건 아니고, @ConditionalOnXxxYyyZzz 와 같이 조건에 맞을 때만 빈으로 자동 등록해준다.
 
 ### 자동 설정 만들기 1부: Starter와 AutoConfigure
+* 커스텀한 자동설정 패키지 만들기
+	* Xxx-Spring-Boot-Autoconfigure 모듈: 자동 설정
+	* Xxx-Spring-Boot-Starter 모듈: 필요한 의존성 정의
+	* 그냥 하나로 만들고 싶을 때는?
+		* Xxx-Spring-Boot-Starter -> 해당이름으로 프로젝트 만들어서 pom.xml에 정의하여 사용(소스코드가 없는 프로젝트가 될 수도 있음)
+* 구현 방법
+	1. Configuration 프로젝트 생성
+	2. 의존성 추가
+	```xml
+	<dependencies>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-autoconfigure</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-autoconfigure-processor</artifactId>
+			<optional>true</optional>
+		</dependency>
+	</dependencies>
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-dependencies</artifactId>
+				<version>2.0.3.RELEASE</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+	```
+	3. @Configuration 파일 작성
+	4. src/main/resource/META-INF에 spring.factories 파일 만들기
+	5. spring.factories 안에 자동 설정 파일 추가
+	```
+	org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+	FQCN,\
+	FQCN
+	```
+	6. mvn install
+	7. ~SNAPSHOP.jar을 사용할 프로젝트에서 의존성추가
+* 덮어쓰기 문제 : ComponentScan -> AutoConfiguration 이 수행되서 그렇다 (->다음강의)
 
 ### 자동 설정 만들기 2부: @ConfigurationProperties
+* 덮어쓰기 방지하기 : @ConditionalOnMissingBean 어노테이션을 써주면 빈이 없을때만 수행한다.
+* 빈 재정의 수고 덜기
+	* Configuration 프로젝트
+		* ~Propertiese 클래스에 @ConfigurationProperties(“holoman”)를 달아줌.
+		* ~Configuration 빈에 @EnableConfigurationProperties(HolomanProperties.class)
+	* Application 프로젝트 : application.properties에 정의
+	* 의문??? : Configuration 프로젝트 Application 프로젝트의 application.properties 값을 어떻게 읽는거지? (밑에얘가 해주는건가..?)
+	```xml
+	<dependency>
+		 <groupId>org.springframework.boot</groupId>
+		 <artifactId>spring-boot-configuration-processor</artifactId>
+		 <optional>true</optional>
+	</dependency>
+	```
+* @Conditional~ 어노테이션 찾아보기 
 
 ### 내장 웹 서버 이해
+* 스프링 부트는 서버가 아니다. 툴일 뿐이다. 내장된 톰캣을 사용하는 것! (서버는 톰캣,네트,제티,..)
+	* 톰캣 객체 생성
+	* 포트 설정
+	* 톰캣에 컨텍스트 추가
+	* 서블릿 만들기
+	* 톰캣에 서블릿 추가
+	* 컨텍스트에 서블릿 맵핑
+	* 톰캣 실행 및 대기
+* 이 모든 과정을 보다 상세히 또 유연하고 설정하고 실행해주는게 바로 스프링 부트의 자동 설정.
+	* ServletWebServerFactoryAutoConfiguration (서블릿 웹 서버 생성)
+		* TomcatServletWebServerFactoryCustomizer (서버 커스터마이징)
+	* DispatcherServletAutoConfiguration
+		* 서블릿 만들고 등록
+* 의문??? : 부트쓰면 서버에 따로 톰캣이 없어도 되는..??
 
 ### 내장 웹 서버 응용 1부 : 컨테이너와 포트
-
+* 다른 서블릿 컨테이너로 변경 (톰캣 -> ~) 
+* 웹 서버 사용 하지 않기
+	* properties에 `spring.main.web-application-type=none` 추가
+* 포트
+	* properties에 `server.port=7070`
+	* 랜덤 포트 `server.port=0`
+	* ApplicationListner<ServletWebServerInitializedEvent> 리스너 추가로 포트번호 꺼내기.. (필요할까?)
+	
 ### 내장 웹 서버 응용 2부 : HTTPS와 HTTP2
 
 ### 톰캣 HTTP2
