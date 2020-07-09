@@ -161,7 +161,7 @@
 		 <optional>true</optional>
 	</dependency>
 	```
-* @Conditional~ 어노테이션 찾아보기 
+* **@Conditional~ 어노테이션 찾아보기** 
 
 ### 내장 웹 서버 이해
 * 스프링 부트는 서버가 아니다. 툴일 뿐이다. 내장된 톰캣을 사용하는 것! (서버는 톰캣,네트,제티,..)
@@ -189,8 +189,22 @@
 	* ApplicationListner<ServletWebServerInitializedEvent> 리스너 추가로 포트번호 꺼내기.. (필요할까?)
 	
 ### 내장 웹 서버 응용 2부 : HTTPS와 HTTP2
+* **https://opentutorials.org/course/228/4894 정주행+정리 하기**
+* HTTPS 설정하기
+	* 키스토어 만들기
+	* HTTP는 못쓴다. HTTPS를 적용했기때문에 하나만 가능. 
+		* 되게하려면? [HTTP 커넥터는 코딩으로 설정하기](https://github.com/spring-projects/spring-boot/tree/v2.0.3.RELEASE/spring-boot-samples/spring-boot-sample-tomcat-multi-connectors)
+* HTTP2 설정 : server.http2.enable=true 
+	* https가 설정이 되있어야 http2를 설정할 수 있음
+	* 사용하는 서블릿 컨테이너 마다 다름.
+		* Undertow : 별도 설정 필요 없음
+		* 톰캣
+			* 버전 8.5.x : 복잡하다... 하지마라!
+			* 버전 9.0.x, JDK9 이상에서는 설정없이 사용가능
 
 ### 톰캣 HTTP2
+* (위에 써놓은 내용)
+* **HTTP2란??**
 
 ### 독립적으로 실행 가능한 JAR
 
