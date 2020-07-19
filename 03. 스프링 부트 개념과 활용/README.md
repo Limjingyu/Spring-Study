@@ -258,7 +258,7 @@ app.setBanner((env, soureClass, out) -> {
 }
 app.run(args);
 ```
-		* banner.txt가 코딩으로 설정한 것보다 우선순위가 높다
+*	*	* banner.txt가 코딩으로 설정한 것보다 우선순위가 높다
 * SpringApplicationBuilder
 	* 빌더 패턴 제공
 	* 이 방법도 커스터마이징 가능
@@ -281,7 +281,7 @@ public class SampleListener implements ApplicationListener<ApplicationStartingEv
 	}
 }
 ```
-	* 근데 위의 이벤트는 ApplicationContext가 만들어지기도 전에 발생하는 이벤트여서 리스너가 동작하지 않는다. 이런 경우에는 bean으로 생성하는 것으로는 자동으로 실행되지 않고 SpringApplication 인스턴스를 만들고, .addListeners(new SampleListener())로 등록해주어야 한다(빈으로 등록하는 것은 의미가 없다)
+*	* 근데 위의 이벤트는 ApplicationContext가 만들어지기도 전에 발생하는 이벤트여서 리스너가 동작하지 않는다. 이런 경우에는 bean으로 생성하는 것으로는 자동으로 실행되지 않고 SpringApplication 인스턴스를 만들고, .addListeners(new SampleListener())로 등록해주어야 한다(빈으로 등록하는 것은 의미가 없다)
 * WebApplicationType 설정
 	* WebApplicationType은 NONE, SERVLET, REACTIVE 세 가지가 있다
 	* Spring MVC가 있다면 SERVLET으로 동작
@@ -314,7 +314,7 @@ public class AppRunner implements ApplicationRunner {
 	}
 }
 ```
-		* CommandLineRunner를 이용하면 메소드 구현의 인자가 String ...args로 들어와서 처리하기에 별로..
+*	*	* CommandLineRunner를 이용하면 메소드 구현의 인자가 String ...args로 들어와서 처리하기에 별로..
 	* @Order()
 		* ApplicationRunner를 여러 개 설정했다면 각 순서를 설정할 수 있다
 		* 숫자가 적은 것이 우선순위가 높다
@@ -342,7 +342,7 @@ public class ApplicationTests {
 	}
 }
 ```
-			* 문제점 : main/resouces/application.properties를 덮어쓰기 때문에 main에만 설정하고 test에 설정하지 않았을 경우 main의 설정파일에 설정한 값이 사라지게 된다
+*	*	*	* 문제점 : main/resouces/application.properties를 덮어쓰기 때문에 main에만 설정하고 test에 설정하지 않았을 경우 main의 설정파일에 설정한 값이 사라지게 된다
 		* 방법2
 			* 우선순위 3
 			* @SpringBootTest(properties = "keesun.name=keesun2")
@@ -382,7 +382,7 @@ public class KeesunProperties {
 // 원래는 @ConfigurationProperties 어노테이션을 처리할 수 있게끔 main class 위에 @EnableConfigurationProperties(KeesunProperties.class)를 등록해주어야 하는데 내장되어 있다
 // 사용하는 곳에서는 @Autowired KeesunProperties properties; 로 받아서 쓴다
 ```
-	* 여러 프로퍼티를 묶어서 읽어올 수 있음
+*	* 여러 프로퍼티를 묶어서 읽어올 수 있음
 	* (설정 파일의 값들을) 빈으로 등록해서 다른 빈에 주입할 수 있음
 		* @EnableConfigurationProperties
 		* @Component (주로 쓰는 방법)
@@ -404,12 +404,12 @@ keesun.sessionTimeout = 25
 @DurationUnit(ChronoUnit.SECONDS)
 private Duration sessionTimeout = Duration.ofSeconds(30); // set default 30 sec
 ```
-			* 그런데 25s를 사용하면 @DurationUnit annotation을 사용하지 않아도 된다
+*	*	*	* 그런데 25s를 사용하면 @DurationUnit annotation을 사용하지 않아도 된다
 ```java
 keesun.sessionTime=25s
 private Duration sessionTimeout = Duration.ofSeconds(30);
 ```
-		* spring이 제공하는 conversion service를 이용하여 변환해 준다
+*	*	* spring이 제공하는 conversion service를 이용하여 변환해 준다
 		* ex. keesun.age = 100 // string
 			private int age; // 자동으로 형 변환하여 integer로 주입
 	* 프로퍼티 값 검증
@@ -427,7 +427,7 @@ public class KeesunProperties {
 	...
 }
 ```
-	* (참고) Third-party Configuration : 이미 존재하는 설정을 빈으로 등록하여 사용하는 방법https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-external-config-3rd-party-configuration
+*	* (참고) Third-party Configuration : 이미 존재하는 설정을 빈으로 등록하여 사용하는 방법https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-external-config-3rd-party-configuration
 
 ### 프로파일
 * @Profile annotation은 어디에?
@@ -503,7 +503,7 @@ public class SampleControllerTest {
 		// 어떤 클래스의 어떤 메소드를 사용했는지 등등도 검사할 수 있다 
 }
 ```
-		* RANDOM_PORT, DEFINED_PORT : 내장 톰캣을 사용, test용 RestTemplate이나 test용 WebClient(for webflux)를 사용해야 한다
+*	*	* RANDOM_PORT, DEFINED_PORT : 내장 톰캣을 사용, test용 RestTemplate이나 test용 WebClient(for webflux)를 사용해야 한다
 ```java
 @RunWith(SpringRunner.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT) // 실제 내장 톰캣을 띄우고 거기에 요청을 보내어 테스트한다
@@ -520,7 +520,7 @@ public class SampleControllerTest {
 	}
 }
 ```
-		* NONE: 서블릿 환경 제공 안 함
+*	*	* NONE: 서블릿 환경 제공 안 함
 * @MockBean
 	* ApplicationContext에 들어있는 빈을 Mock으로 만든 객체로 교체함
 	* 모든 @Test마다 자동으로 리셋
@@ -557,7 +557,7 @@ public class Test {
 	...
 }
 ```
-	* @WebFluxTest
+*	* @WebFluxTest
 	* @DataJpaTest // @Repository 들만 빈으로 등록
 ...
 
