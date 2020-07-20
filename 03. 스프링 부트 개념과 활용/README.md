@@ -249,39 +249,39 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
 			* ${spring-boot.version} : 버전 정보를 찍을 수 있다. 
 			* banner.txt를 다른 위치에 두려면 application.properties에 spring.banner.location=classpath:... 로 가능
 		* 코딩으로 하려면 아래와 같이 하자
-```java
-SpringApplication app = new SpringApplication(App.class);
-app.setBanner((env, soureClass, out) -> {
-	out.println("==========");
-	out.println("whiteship");
-	out.println("==========");
-}
-app.run(args);
-```
-*	*	* banner.txt가 코딩으로 설정한 것보다 우선순위가 높다
+		```java
+		SpringApplication app = new SpringApplication(App.class);
+		app.setBanner((env, soureClass, out) -> {
+			out.println("==========");
+			out.println("whiteship");
+			out.println("==========");
+		}
+		app.run(args);
+		```
+		* banner.txt가 코딩으로 설정한 것보다 우선순위가 높다
 * SpringApplicationBuilder
 	* 빌더 패턴 제공
 	* 이 방법도 커스터마이징 가능
-```java
-psvm() {
-	new SpringApplicationBuilder()
-		.source(App.class)
-		.run(args);
-}
-```
+	```java
+	psvm() {
+		new SpringApplicationBuilder()
+			.source(App.class)
+			.run(args);
+	}
+	```
 * ApplicationEvent 등록
 	* spring, spring boot 이벤트를 여러 가지 상황에서 제공 : 애플리케이션이 시작될 떄, application context를 만들었을 떄/ 리프레시 될 떄, 애플리케이션이 다 떠서 준비가 되었을 때/ 실패했을 때 등
 	* 이벤트 리스너 만들기
-```java
-@Component // listener가 bean으로 등록되면 자동으로 리스너를 실행해 준다. 다만 ApplicationContext가 만들어지기도 전에 발생하는 이벤트는 직접 SpringApplication 인스턴스에 등록해야 한다
-public class SampleListener implements ApplicationListener<ApplicationStartingEvent> {
-	@Override
-	public void onApplicationEvent(ApplicationStartingEvent event) {
-		sout("ApplicationStarting");
+	```java
+	@Component // listener가 bean으로 등록되면 자동으로 리스너를 실행해 준다. 다만 ApplicationContext가 만들어지기도 전에 발생하는 이벤트는 직접 SpringApplication 인스턴스에 등록해야 한다
+	public class SampleListener implements ApplicationListener<ApplicationStartingEvent> {
+		@Override
+		public void onApplicationEvent(ApplicationStartingEvent event) {
+			sout("ApplicationStarting");
+		}
 	}
-}
-```
-*	* 근데 위의 이벤트는 ApplicationContext가 만들어지기도 전에 발생하는 이벤트여서 리스너가 동작하지 않는다. 이런 경우에는 bean으로 생성하는 것으로는 자동으로 실행되지 않고 SpringApplication 인스턴스를 만들고, .addListeners(new SampleListener())로 등록해주어야 한다(빈으로 등록하는 것은 의미가 없다)
+	```
+	* 근데 위의 이벤트는 ApplicationContext가 만들어지기도 전에 발생하는 이벤트여서 리스너가 동작하지 않는다. 이런 경우에는 bean으로 생성하는 것으로는 자동으로 실행되지 않고 SpringApplication 인스턴스를 만들고, .addListeners(new SampleListener())로 등록해주어야 한다(빈으로 등록하는 것은 의미가 없다)
 * WebApplicationType 설정
 	* WebApplicationType은 NONE, SERVLET, REACTIVE 세 가지가 있다
 	* Spring MVC가 있다면 SERVLET으로 동작
@@ -292,29 +292,29 @@ public class SampleListener implements ApplicationListener<ApplicationStartingEv
 	* application arguments : -- 옵션으로 들어오는 것 (intellij에서는 Program arguments)
 	* vm option : -D 로 들어오는 것
 	* application argument 찍어보기
-```java
-@Component
-public class AppArgs {
-	public AppArgs(ApplicationArguments args) {
-		sout("foo:" + args.containsOption("foo")); // vm option -D로 설정한 값이었고, false가 찍힘
-		sout("bar:" + args.containeOption("bar")); // application arguments로 설정한 값이고, true가 찍힘
+	```java
+	@Component
+	public class AppArgs {
+		public AppArgs(ApplicationArguments args) {
+			sout("foo:" + args.containsOption("foo")); // vm option -D로 설정한 값이었고, false가 찍힘
+			sout("bar:" + args.containeOption("bar")); // application arguments로 설정한 값이고, true가 찍힘
+		}
 	}
-}
-```
+	```
 * application이 실행된 뒤 추가로 어떤 작업이 필요할 때
 	* ApplicationRunner (추천) 또는 CommandLineRunner
 		* ApplicationRunner가 더 좋다
-```java
-@Component
-public class AppRunner implements ApplicationRunner {
-	@Override
-	public void run(ApplicationArguments args) {
-		sout("foo:" + args.containsOption("foo"));
-		sout("bar:" + args.containeOption("bar"));
-	}
-}
-```
-*	*	* CommandLineRunner를 이용하면 메소드 구현의 인자가 String ...args로 들어와서 처리하기에 별로..
+		```java
+		@Component
+		public class AppRunner implements ApplicationRunner {
+			@Override
+			public void run(ApplicationArguments args) {
+				sout("foo:" + args.containsOption("foo"));
+				sout("bar:" + args.containeOption("bar"));
+			}
+		}
+		```
+		* CommandLineRunner를 이용하면 메소드 구현의 인자가 String ...args로 들어와서 처리하기에 별로..
 	* @Order()
 		* ApplicationRunner를 여러 개 설정했다면 각 순서를 설정할 수 있다
 		* 숫자가 적은 것이 우선순위가 높다
@@ -329,20 +329,20 @@ public class AppRunner implements ApplicationRunner {
 			* test/resources/application.properties에 설정
 			* intellij의 command+;를 눌러서 Modules 탭에 TestResources 탭, TestResource Folders에 설정
 			* 빌드 시 test code도 classpath에 들어가고 test/resources/application.properties가 main/resources/application.properties를 대체한다
-```java
-@RunWith(SpringRunner.class)
-@SpringBootTest
-public class ApplicationTests {
-	@Autowired
-	Environment env; // org.springframework.core.env.Environment
-	@Test
-	public void test() {
-		assertThat(env.getProperty("keesun.name"))
-				.isEqualTo("keesun"); // test/resoucres/application.properties의 설정파일을 사용
-	}
-}
-```
-*	*	*	* 문제점 : main/resouces/application.properties를 덮어쓰기 때문에 main에만 설정하고 test에 설정하지 않았을 경우 main의 설정파일에 설정한 값이 사라지게 된다
+			```java
+			@RunWith(SpringRunner.class)
+			@SpringBootTest
+			public class ApplicationTests {
+				@Autowired
+				Environment env; // org.springframework.core.env.Environment
+				@Test
+				public void test() {
+					assertThat(env.getProperty("keesun.name"))
+							.isEqualTo("keesun"); // test/resoucres/application.properties의 설정파일을 사용
+				}
+			}
+			```
+			* 문제점 : main/resouces/application.properties를 덮어쓰기 때문에 main에만 설정하고 test에 설정하지 않았을 경우 main의 설정파일에 설정한 값이 사라지게 된다
 		* 방법2
 			* 우선순위 3
 			* @SpringBootTest(properties = "keesun.name=keesun2")
@@ -369,20 +369,20 @@ public class ApplicationTests {
 	* 다만 테스트에서 @TestPropertySouce를 사용중이라면 이 application.properties의 위치에 따른 우선순위보다는 외부설정 우선순위를 따라가게 된다
 
 * 타입-세이프 프로퍼티 @ConfigurationProperties
-```java
-@Component
-@ConfigurationProperties("keesun")
-public class KeesunProperties {
-	private String name;
-	private int age;
-	private String fullName;
-	//getter/setter
-}
-// (참고)이 때 intellij에서 "Spring Boot Configuration Annotation Processor not found in classpath" 라는 에러를 주는데 application.properties에서 intellij가 자동완성을 하기위한 메타데이터를 가져올 수 있는 플러그인을 넣어줘야 한다. (spring-boot-configuration-processor)
-// 원래는 @ConfigurationProperties 어노테이션을 처리할 수 있게끔 main class 위에 @EnableConfigurationProperties(KeesunProperties.class)를 등록해주어야 하는데 내장되어 있다
-// 사용하는 곳에서는 @Autowired KeesunProperties properties; 로 받아서 쓴다
-```
-*	* 여러 프로퍼티를 묶어서 읽어올 수 있음
+	```java
+	@Component
+	@ConfigurationProperties("keesun")
+	public class KeesunProperties {
+		private String name;
+		private int age;
+		private String fullName;
+		//getter/setter
+	}
+	// (참고)이 때 intellij에서 "Spring Boot Configuration Annotation Processor not found in classpath" 라는 에러를 주는데 application.properties에서 intellij가 자동완성을 하기위한 메타데이터를 가져올 수 있는 플러그인을 넣어줘야 한다. (spring-boot-configuration-processor)
+	// 원래는 @ConfigurationProperties 어노테이션을 처리할 수 있게끔 main class 위에 @EnableConfigurationProperties(KeesunProperties.class)를 등록해주어야 하는데 내장되어 있다
+	// 사용하는 곳에서는 @Autowired KeesunProperties properties; 로 받아서 쓴다
+	```
+	* 여러 프로퍼티를 묶어서 읽어올 수 있음
 	* (설정 파일의 값들을) 빈으로 등록해서 다른 빈에 주입할 수 있음
 		* @EnableConfigurationProperties
 		* @Component (주로 쓰는 방법)
@@ -397,37 +397,37 @@ public class KeesunProperties {
 	* 프로퍼티 타입 컨버전
 		* @DurationUnit
 			* 시간 정보를 받을 때 사용
-```java
-// application.properties
-keesun.sessionTimeout = 25
-// KeesunProperties class
-@DurationUnit(ChronoUnit.SECONDS)
-private Duration sessionTimeout = Duration.ofSeconds(30); // set default 30 sec
-```
-*	*	*	* 그런데 25s를 사용하면 @DurationUnit annotation을 사용하지 않아도 된다
-```java
-keesun.sessionTime=25s
-private Duration sessionTimeout = Duration.ofSeconds(30);
-```
-*	*	* spring이 제공하는 conversion service를 이용하여 변환해 준다
+			```java
+			// application.properties
+			keesun.sessionTimeout = 25
+			// KeesunProperties class
+			@DurationUnit(ChronoUnit.SECONDS)
+			private Duration sessionTimeout = Duration.ofSeconds(30); // set default 30 sec
+			```
+			* 그런데 25s를 사용하면 @DurationUnit annotation을 사용하지 않아도 된다
+			```java
+			keesun.sessionTime=25s
+			private Duration sessionTimeout = Duration.ofSeconds(30);
+			```
+		* spring이 제공하는 conversion service를 이용하여 변환해 준다
 		* ex. keesun.age = 100 // string
 			private int age; // 자동으로 형 변환하여 integer로 주입
 	* 프로퍼티 값 검증
 		* @Validated
 		* JSR-303 사용 가능 (@NotNull, ...)
-```java
-@Component
-@ConfigurationProperties("keesun")
-@Validated
-public class KeesunProperties {
-	@NotEmpty
-	private String name;
-	@Size(min=0, max=100)
-	private int age;
-	...
-}
-```
-*	* (참고) Third-party Configuration : 이미 존재하는 설정을 빈으로 등록하여 사용하는 방법https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-external-config-3rd-party-configuration
+		```java
+		@Component
+		@ConfigurationProperties("keesun")
+		@Validated
+		public class KeesunProperties {
+			@NotEmpty
+			private String name;
+			@Size(min=0, max=100)
+			private int age;
+			...
+		}
+		```
+	* (참고) Third-party Configuration : 이미 존재하는 설정을 빈으로 등록하여 사용하는 방법https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-external-config-3rd-party-configuration
 
 ### 프로파일
 * @Profile annotation은 어디에?
@@ -487,77 +487,77 @@ public class KeesunProperties {
 	* @SpringBootApplication 을 찾아가서 모든 bean scan 후에 @MockBean만 찾아서 교체해준다. 
 	* webEnvironment
 		* MOCK : mock servlet environment, 내장 톰캣 구동하지 않음. Mocking DispatcherServlet을 사용하므로 MockMvc를 사용해야 한다.
-```java
-@RunWith(SpringRunner.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK) // servlet을 mocking한 DispatcherServlet이 뜬다
-@AutoConfigureMockMvc // 위의 Mock DispatcherServlet에 요청을 보내려면 MockMvc, MockMvcClient를 사용해야 한다. 이를 위해 이 어노테이션과 아래의 MockMvc를 사용하면 된다
-public class SampleControllerTest {
-	@Autowired
-	MockMvc mockMvc;
-	@Test
-	public void hello() throws Exception {
-		mockMvc.perform(get("/hello"))
-			.andExpect(status().isOk()) // 기대되는 결과값
-			.andExpect(content().string("hello suhyeon")) // 기대되는 컨텐츠 내용
-			.andDo(print());
-		// 어떤 클래스의 어떤 메소드를 사용했는지 등등도 검사할 수 있다 
-}
-```
-*	*	* RANDOM_PORT, DEFINED_PORT : 내장 톰캣을 사용, test용 RestTemplate이나 test용 WebClient(for webflux)를 사용해야 한다
-```java
-@RunWith(SpringRunner.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT) // 실제 내장 톰캣을 띄우고 거기에 요청을 보내어 테스트한다
-public class SampleControllerTest {
-	@Autowired
-	TestRestTemplate testRestTemplate;
-	@MockBean
-	SampleService mockSampleService; // ApplicationContext에 들어있는 빈SampleController.sampleService를 모킹하여 controller layer에서만 테스트를 진행할 수 있다
-	@Test
-	public void hello() {
-		when(mockSampleService.getName()).thenReturn("sh"); // 결과값을 모킹한다
-		String result = testRestTemplate.getForObject("/hello", String.class);
-		assetThat(result).isEqualsTo("hello sh");
-	}
-}
-```
-*	*	* NONE: 서블릿 환경 제공 안 함
+		```java
+		@RunWith(SpringRunner.class)
+		@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK) // servlet을 mocking한 DispatcherServlet이 뜬다
+		@AutoConfigureMockMvc // 위의 Mock DispatcherServlet에 요청을 보내려면 MockMvc, MockMvcClient를 사용해야 한다. 이를 위해 이 어노테이션과 아래의 MockMvc를 사용하면 된다
+		public class SampleControllerTest {
+			@Autowired
+			MockMvc mockMvc;
+			@Test
+			public void hello() throws Exception {
+				mockMvc.perform(get("/hello"))
+					.andExpect(status().isOk()) // 기대되는 결과값
+					.andExpect(content().string("hello suhyeon")) // 기대되는 컨텐츠 내용
+					.andDo(print());
+				// 어떤 클래스의 어떤 메소드를 사용했는지 등등도 검사할 수 있다 
+		}
+		```
+		* RANDOM_PORT, DEFINED_PORT : 내장 톰캣을 사용, test용 RestTemplate이나 test용 WebClient(for webflux)를 사용해야 한다
+		```java
+		@RunWith(SpringRunner.class)
+		@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT) // 실제 내장 톰캣을 띄우고 거기에 요청을 보내어 테스트한다
+		public class SampleControllerTest {
+			@Autowired
+			TestRestTemplate testRestTemplate;
+			@MockBean
+			SampleService mockSampleService; // ApplicationContext에 들어있는 빈SampleController.sampleService를 모킹하여 controller layer에서만 테스트를 진행할 수 있다
+			@Test
+			public void hello() {
+				when(mockSampleService.getName()).thenReturn("sh"); // 결과값을 모킹한다
+				String result = testRestTemplate.getForObject("/hello", String.class);
+				assetThat(result).isEqualsTo("hello sh");
+			}
+		}
+		```
+		* NONE: 서블릿 환경 제공 안 함
 * @MockBean
 	* ApplicationContext에 들어있는 빈을 Mock으로 만든 객체로 교체함
 	* 모든 @Test마다 자동으로 리셋
 * WebClient
 	* spring webflux (asynchronous) 를 이용할 때 사용. 비동기로 동작하여 응답이 오면 콜백으로 처리한다
 	* spring-boot-starter-webflux 의존성 필요
-```java
-public class SampleControllerTest {
-	@Autowired
-	WebTestClient webTestClient;
-	@MockBean
-	SampleService mockSampleService;
-	@Test
-	public void hello() {
-		when(mockSampleService.getName()).thenReturn("suhyeon");
-		webTestClient.get().uri("/").exchange()
-			.expectStatus().isOk()
-			.expectBody(String.class).isEqualsTo("hello suhyeon");
-}
-```
+	```java
+	public class SampleControllerTest {
+		@Autowired
+		WebTestClient webTestClient;
+		@MockBean
+		SampleService mockSampleService;
+		@Test
+		public void hello() {
+			when(mockSampleService.getName()).thenReturn("suhyeon");
+			webTestClient.get().uri("/").exchange()
+				.expectStatus().isOk()
+				.expectBody(String.class).isEqualsTo("hello suhyeon");
+	}
+	```
 * 슬라이스 테스트
 	* SpringBootTest가 모든 빈을 찾아서 작업하므로 좀 더 간단하게 하려면 이 방법을 사용
 	* 레이어 별로 잘라서 테스트하고 싶을 때
 	* @JsonTest // 가지고있는 모델이 어떤 모양의 json으로 나가는지 확인하는 테스트, https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-testing-spring-boot-applications-testing-autoconfigured-json-tests
 	* @WebMvcTest // controller 하나만 테스트하기
-```java
-@RunWith(SpringRunner.class)
-@WebMvcTest(SampleController.class) // web과 관련된 빈들만(@Controller 등) 빈으로 등록이 된다. (@Component 하위의 어노테이션들의 구분이 필요했던 이유라고 생각됨)
-public class Test {
-	@MockBean
-	SampleService sampleService; // @Service는 web과 관련된 빈이 아니라서 mock으로 등록해야한다
-	@Autowired
-	MockMvc mockMvc;
-	...
-}
-```
-*	* @WebFluxTest
+	```java
+	@RunWith(SpringRunner.class)
+	@WebMvcTest(SampleController.class) // web과 관련된 빈들만(@Controller 등) 빈으로 등록이 된다. (@Component 하위의 어노테이션들의 구분이 필요했던 이유라고 생각됨)
+	public class Test {
+		@MockBean
+		SampleService sampleService; // @Service는 web과 관련된 빈이 아니라서 mock으로 등록해야한다
+		@Autowired
+		MockMvc mockMvc;
+		...
+	}
+	```
+	* @WebFluxTest
 	* @DataJpaTest // @Repository 들만 빈으로 등록
 ...
 
@@ -566,20 +566,20 @@ public class Test {
 	* 가장 유용할 것
 	* 로그를 비롯한 콘솔에 찍히는 모든 것을 캡쳐
 	* 로그 메세지가 어떻게 찍혔는지 테스트 가능하다
-```java
-@RunWith(SpringRunner.class)
-public class Test {
-	@Rule
-	public OutputCapture outputCapture = new OutputCapture();
-	@Test
-	public void test() {
-		...
-		assertThat(outputCapture.toString())
-			.contains("holoman") // logger의 내용
-			.contains("skip");        // sout의 내용도 가능
+	```java
+	@RunWith(SpringRunner.class)
+	public class Test {
+		@Rule
+		public OutputCapture outputCapture = new OutputCapture();
+		@Test
+		public void test() {
+			...
+			assertThat(outputCapture.toString())
+				.contains("holoman") // logger의 내용
+				.contains("skip");        // sout의 내용도 가능
+		}
 	}
-}
-```
+	```
 * TestPropertyValues
 * TestRestTemplate
 * ConfigFileApplicationContextInitializer
