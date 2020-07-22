@@ -584,6 +584,120 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
 * TestRestTemplate
 * ConfigFileApplicationContextInitializer
 
+### Spring-Boot-Devtools
+: 말그대로 dev용..! (굳이 사용할 필요가 있을까 싶음.. 그냥 껐다 키자 )
+* 캐시 설정을 개발 환경에 맞게 변경.
+* 클래스패스에 있는 파일이 변경 될 때마다 자동으로 재시작.
+    * 직접 껐다 켜는거 (cold starts)보다 빠른다. 왜?
+    * 릴로딩 보다는 느리다. (JRebel 같은건 아님)
+    * 리스타트 하고 싶지 않은 리소스는? spring.devtools.restart.exclude
+    * 리스타트 기능 끄려면? spring.devtools.restart.enabled = false
+* 라이브 릴로드? 리스타트 했을 때 브라우저 자동 리프레시 하는 기능
+    * 브라우저 플러그인 설치해야 함.
+    * 라이브 릴로드 서버 끄려면? spring.devtools.liveload.enabled = false
+* 글로벌 설정
+    * ~/.spring-boot-devtools.properties
+* 리모트 애플리케이션
+
+
+### 스프링 웹 MVC 1부: 소개
+ : 스프링에서의 MVC개념 위주가 아니라 부트가 제공해주는 MVC 기능 기준으로 설명
+ : 우리가 아무런 설정없이 어노테이션으로만 MVC 개발이 가능 -> WebMvcAutoConfiguration가 내부적으로 설정해줌! (@AutoConfiguration)
+* 스프링 웹 MVC
+    * https://docs.spring.io/spring/docs/5.0.7.RELEASE/spring-framework-reference/web.html#spring-web
+* 스프링 부트 MVC
+    * 자동 설정으로 제공하는 여러 기본 기능 (앞으로 살펴볼 예정)
+* 스프링 MVC 확장 : @Configuration + implements WebMvcConfigurer
+    * 기본 제공 설정 사용 + 확장
+* 스프링 MVC 재정의 : @Configuration + @EnableWebMvc
+    * 기본 제공 설정 사용 X(사용할 일 없을듯)
+
+### 스프링 웹 MVC 2부: HttpMessageConverters
+* https://docs.spring.io/spring/docs/5.0.7.RELEASE/spring-framework-reference/web.html#mvc-config-message-converters
+* 스프링 프레임워크에서 제공하는 인터페이스
+* HTTP 요청 본문을 객체로 변경하거나, 객체를 HTTP 응답 본문으로 변경할 때 사용.
+    * 반환타입에 따라 json/string 각 컨버터가 알아서 선택되어 사용됨 
+    * @ReuqestBody
+    * @ResponseBody (@RestController를 사용하면 생략가능)
+    ```java
+    @Test
+    public void createUser_JSON() throws Exception {
+        String userJson = "{\"username\":\"jingyu\", \"password\":\"123\"}";
+        mockMvc.perform(post("/users/create")
+                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .accept(MediaType.APPLICATION_JSON_UTF8)
+                .content(userJson))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.username", is(equalTo("jingyu"))))
+            .andExpect(jsonPath("$.password", is(equalTo("123"))));
+    }
+    ```
+### 스프링 웹 MVC 3부: ViewResolve
+* ViewResolver? 들어오는 요청의 accept 헤더에 따라 클라이언트가 원하는 형식으로 응답을 제공하는 역할 달라지게 세
+* 뷰 리졸버 설정 제공
+* HttpMessageConvertersAutoConfiguration
+* TEST : 응답을 xml형식으로 주기
+    * XML 메시지 컨버터 추가하기
+    ```xml
+    <dependency>
+        <groupId>com.fasterxml.jackson.dataformat</groupId>
+        <artifactId>jackson-dataformat-xml</artifactId>
+        <version>2.9.6</version>
+    </dependency>
+    ```
+ 
+### 스프링 웹 MVC 4부: 정적 리소스 지원
+ : 동적으로 생성하지 않고, 이미 만들어진 리소스를 제공하는 것 (에러페이지같은거에 쓸듯?)
+ : 정적 리소스를 처리하는 작업은 ResourceHttpRequestHandler가 처리. 얘가 Last-Modified 헤더를 보고 304 응답을 보냄 (바뀌면 다시 200)
+정적 리소스 맵핑 “/**”
+* 기본 리소스 위치
+    * classpath:/static
+    * classpath:/public
+    * classpath:/resources/
+    * classpath:/META-INF/resources
+* 기본리소스 경로 수정/추가 방법
+    * 맵핑 설정 변경 가능 
+        * ex) spring.mvc.static-path-pattern=/static/** : “/hello.html” => /static/hello.html 
+    * 리소스 찾을 위치 변경 가능 (spring.mvc.static-locations) 
+    * 내가 원하는 리소스핸들러 추가 : WebMvcConfigurer의 addRersourceHandlers로 커스터마이징 할 수 있음
+    ```java
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+      registry.addResourceHandler("/m/**")
+          .addResourceLocations("classpath:/m/")
+          .setCachePeriod(20);
+    }
+    ```
+    
+### 스프링 웹 MVC 5부: 웹JAR
+ : 클라이언트에서 사용하는 javascript 라이브러리를 jar파일로 디펜던시를 추가하는 것. ex) jQuery,bootstrap,view.js,..
+ : https://mvnrepository.com 에서 필요한 의존성 찾아서 넣어주면 사용 가능!
+* 웹JAR 맵핑 “/webjars/**”
+* 버전생략하고 사용하기? : webjars-locator-core 의존성 추가
+    * 실무에서 버전없이 사용하는게 좋은건지 의문...
+    
+### 스프링 웹 MVC 6부: index 페이지와 파비콘
+* 웰컴 페이지 : 루트 경로로 접근했을때 뜨는 페이지 화면
+    * index.html 찾아 보고 있으면 제공.
+    * index.템플릿 찾아 보고 있으면 제공.
+    * 둘 다 없으면 에러 페이지.
+*파비콘 : 
+    * favicon.ico
+    * 파이콘 만들기 https://favicon.io/
+    * 파비콘이 안 바뀔 때?
+        * https://stackoverflow.com/questions/2208933/how-do-i-force-a-favicon-refresh
+        
+### 스프링 웹 MVC 7부: Thymeleaf
+
+### 스프링 웹 MVC 8부: HtmlUnit
+
+### 스프링 웹 MVC 9부: ExceptionHandler
+
+### 스프링 웹 MVC 10부: Spring HATEOAS
+
+### 스프링 웹 MVC 11부: CORS
+
+
 ## 섹션 4. 스프링 부트 운영
 
 ## 섹션 5. 마무리
