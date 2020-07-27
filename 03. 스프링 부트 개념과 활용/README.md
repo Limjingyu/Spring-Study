@@ -589,6 +589,9 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
 * 캐시 설정을 개발 환경에 맞게 변경.
 * 클래스패스에 있는 파일이 변경 될 때마다 자동으로 재시작.
     * 직접 껐다 켜는거 (cold starts)보다 빠른다. 왜?
+    ```java
+    스프링부트는 두개의 클래스로더를 사용한다. base classloader는 우리가 변경하지 않는 의존성(third-part jars)을 로드한다. restart classloader는 우리가 개발하는 애플리케이션을 로드한다. Devtools에 의해 애플리케이션이 다시시작 될 때 restart classloader는 제거되고 재생성된다. 반면, base classloader에서 로드된 외부 의존성은 제거되지 않고 다시 사용되기 때문에 일반적으로 cold restart보다 훨씬 빠르다.
+    ```
     * 릴로딩 보다는 느리다. (JRebel 같은건 아님)
     * 리스타트 하고 싶지 않은 리소스는? spring.devtools.restart.exclude
     * 리스타트 기능 끄려면? spring.devtools.restart.enabled = false
@@ -613,13 +616,21 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
     * 기본 제공 설정 사용 X(사용할 일 없을듯)
 
 ### 스프링 웹 MVC 2부: HttpMessageConverters
+ : HTTP 요청 본문을 객체로 변환하거나, 객체를 HTTP 응답 본문으로 변환할 때 사용
 * https://docs.spring.io/spring/docs/5.0.7.RELEASE/spring-framework-reference/web.html#mvc-config-message-converters
 * 스프링 프레임워크에서 제공하는 인터페이스
-* HTTP 요청 본문을 객체로 변경하거나, 객체를 HTTP 응답 본문으로 변경할 때 사용.
-    * 반환타입에 따라 json/string 각 컨버터가 알아서 선택되어 사용됨 
-    * @ReuqestBody
-    * @ResponseBody (@RestController를 사용하면 생략가능)
+* 추가 설명
+    * 요청/반환타입에 따라 json/string 각 컨버터가 알아서 선택되어 사용됨 
+    * @ReuqestBody : @RequestBody는 컨트롤러가 요청을 받을 때 본문에 들어있는 데이터를 객체로 받을 수 있으며, 스프링이 객체로 변환
+    * @ResponseBody : @RequestBody를 사용하면 객체를 문자열로 변환 (@RestController를 사용하면 생략가능) 
     ```java
+    // 컨트롤러
+    @PostMapping("/users/create")
+    public User craate(@RequestBody User user) {
+        return user;
+    }
+      
+    // 테스트
     @Test
     public void createUser_JSON() throws Exception {
         String userJson = "{\"username\":\"jingyu\", \"password\":\"123\"}";
@@ -633,12 +644,25 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
     }
     ```
 ### 스프링 웹 MVC 3부: ViewResolve
-* ViewResolver? 들어오는 요청의 accept 헤더에 따라 클라이언트가 원하는 형식으로 응답을 제공하는 역할 달라지게 세
+* ViewResolver? 들어오는 요청의 accept 헤더에 따라 클라이언트가 원하는 형식으로 응답을 제공하는 역할 달라지게 세팅
 * 뷰 리졸버 설정 제공
-* HttpMessageConvertersAutoConfiguration
+* 
 * TEST : 응답을 xml형식으로 주기
-    * XML 메시지 컨버터 추가하기
+    ```java
+    @Test
+    public void createUser_XML() throws Exception {
+        String userJson = "{\"username\":\"jingyu\", \"password\":\"123\"}";
+        movckMvc.perform(post("/users/create")
+                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .accept(MediaType.APPLICATION_XML)
+                .content(userJson))
+            .andExpect(status().isOk())
+            .andExpect(xpath("/User/username").string("jingyu"))
+            .andExpect(xpath("/User/password").string("123"));
+    }
+    ```
     ```xml
+    // HttpMessageConvertersAutoConfiguration
     <dependency>
         <groupId>com.fasterxml.jackson.dataformat</groupId>
         <artifactId>jackson-dataformat-xml</artifactId>
@@ -659,7 +683,7 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
     * 맵핑 설정 변경 가능 
         * ex) spring.mvc.static-path-pattern=/static/** : “/hello.html” => /static/hello.html 
     * 리소스 찾을 위치 변경 가능 (spring.mvc.static-locations) 
-    * 내가 원하는 리소스핸들러 추가 : WebMvcConfigurer의 addRersourceHandlers로 커스터마이징 할 수 있음
+    * 내가 원하는 리소스핸들러 추가 : WebMvcConfigurer의 addRersourceHandlers로 커스터마이징 할 수 있음 (권장)
     ```java
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
@@ -688,15 +712,93 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
         * https://stackoverflow.com/questions/2208933/how-do-i-force-a-favicon-refresh
         
 ### 스프링 웹 MVC 7부: Thymeleaf
+ : 템플릿엔진? 주로 view를 만드는데 사용. 동적인 컨텐츠를 만드는데 사용. email,invoice 양식 등에도 사용
+* 스프링 부트가 자동 설정을 지원하는 템플릿 엔진
+    * FreeMarker
+    * Groovy
+    * Thymeleaf
+    * Mustache
+* JSP를 권장하지 않는 이유
+    * JAR 패키징 할 때는 동작하지 않고, WAR 패키징 해야 함.
+    * Undertow는 JSP를 지원하지 않음.
+    * 스프링부트는 독립적으로 실행 가능한 내장 톰캣으로 빠르게 앱을 배포하길 원하는데, JSP는 이러한 스프링부트의 지향점과 어긋나기 때문에 스프링부트에서 권장하지 않음
+* Thymeleaf 사용하기
+    * Thymeleaf란?
+        * Thymeleaf는 스프링 부트가 자동 설정을 지원하는  웹 템플릿 엔진. HTML문서에 HTML5 문법으로 서버쪽 로직을 수행하고 적용시킬 수 있음.
+        * HTML 디자인에 전혀 영향을 미치지 않고 웹 템플릿 엔진을 통해 HTML을 생성할 수 있음
+        * 독자적으로 HTML을 생성하기 때문에 테스트 시 렌더링 결과를 확인하기 좋음
+        * -> Thymleaf는 서블릿 컨테이너가 개입하지 않는 서블릿 컨테이너에 독립적인 엔진. Thymleaf는 독자적으로 최종적인 view를 완성하며 랜더링되는 결과까지도 확인
+    * https://www.thymeleaf.org/
+    * https://www.thymeleaf.org/doc/articles/standarddialect5minutes.html < 읽어보기
+    * 의존성 추가: spring-boot-starter-thymeleaf
+    * 템플릿 파일 위치: /src/main/resources/template/
+    * 예제 : https://github.com/thymeleaf/thymeleafexamples-stsm/blob/3.0-master/src/main/webapp/WEB-INF/templates/seedstartermng.html
 
 ### 스프링 웹 MVC 8부: HtmlUnit
-
+ : html을 단위테스트하기 위한 툴 (html을 전문적으로 테스트할때 사용하는.. 굳이..ㅎ)
+ : 화면에 폼 출력 테스트, 특정 브라우저 테스트, html안의 엘리먼트/태그 등으로 가져와서 테스트
+* HTML 템플릿 뷰 테스트를 보다 전문적으로 하자.
+    * http://htmlunit.sourceforge.net/
+    * http://htmlunit.sourceforge.net/gettingStarted.html
+    * 의존성 추가
+    * @Autowire WebClient
+    
 ### 스프링 웹 MVC 9부: ExceptionHandler
-
+ : 부트에는 기본적인 에러핸들러가 등록되어 있다. = BasicErrorController(http/json 응답 모두 지원)
+* 스프링 @MVC 예외 처리 방법
+    * @ExceptionHandler(*Controller.class) : 각 클래스에서 구현. 
+    * @ControllerAdvice를 : 전역에서 모든 예외를 처리하기 위해서는 별도의 클래스를 생성하고 @ControllerAdvice를 지정해야 한다.
+* 커스텀 에러 페이지 : ErrorController를 상속하는 클래스를 만들어서 빈으로 등록
+    * 상태 코드 값에 따라 에러 페이지 보여주기
+        * 경로) src/main/resources/static|template/error/
+        * ex) 404.html, 5xx.html, ..
+    * -> ErrorViewResolver 구현
+    
 ### 스프링 웹 MVC 10부: Spring HATEOAS
+ : REST API를 만들떄, 서버가 리소스를 제공할떄, 리소스와 연관되어 있는 링크정보까지 같이 제공을 하고, 클라이언트는 이 정보를 바탕으로 리소스에 접근.
+ : ex) ....? 뭔말이야
+ ```
+ HATEOAS를 쓰는 이유는 다음과 같은 기존 REST API의 단점을 보완하기 위해서입니다.
+ 
+ 1. REST API는 앤드포인트 URL이 정해지고 나면 이를 변경하기 어렵다는 단점이 있습니다. 만일 API의 URL을 변경하게 되면 모든 클라이언트의 URL까지 수정해야하기 때문에 번거로워지므로 기존 다른 API를 지속적으로 추가하게 됩니다. 따라서 URL 관리가 어렵게 됩니다. 
+ 2. 전달받은 정적 자원의 상태에 따른 요소를 서버 단에서 구현하기 어렵기 때문에 클라이언트 단에서 이 부분에 대한 로직을 처리해야 합니다.
+ 
+ 위 단점들을 links 요소를 통해 href 값의 형태로 보내주기 때문에 자원 상태에 대한 처리를 링크에 있는 URL을 통해 처리할 수 있게됩니다.
+ (_links는 HATEOAS를 구현하기 위해 스프링 부트에서 생성한 JSON name입니다. 그리고 그 뒤의 self는 자기 참조를 뜻하는 것을 JSON을 통해서 나타낸 것입니다.)
+    
+ 출처: https://engkimbs.tistory.com/780?category=767865 [새로비]
+ ```
+* Hypermedia As The Engine Of Application State
+    * 서버: 현재 리소스와 연관된 링크 정보를 클라이언트에게 제공한다.
+    * 클라이언트: 연관된 링크 정보를 바탕으로 리소스에 접근한다.
+    * 연관된 링크 정보
+        * Relation
+        * Hypertext Reference
+    * spring-boot-starter-hateoas 의존성 추가
+    * https://spring.io/understanding/HATEOAS
+    * https://spring.io/guides/gs/rest-hateoas/
+    * https://docs.spring.io/spring-hateoas/docs/current/reference/html/
+* ObjectMapper 제공
+    * spring.jackson.*
+    * Jackson2ObjectMapperBuilder
+* LinkDiscovers 제공
+    * 클라이언트 쪽에서 링크 정보를 Rel 이름으로 찾을때 사용할 수 있는 XPath 확장 클래스
+
+* ? : import org.springframework.hateoas.Resource; 없..
+
 
 ### 스프링 웹 MVC 11부: CORS
-
+* SOP과 CORS
+    * SOP(Single-Origin Policy) : 기본적으로는 origin이 다른 경우 리소스를 요청할 수 없다
+    * CORS(Cross-Origin Resource Sharing) : 서로 다른 origin 끼리 리소스를 공유
+    * Origin? 아래 3개의 조합이 하나의 origin
+        * URI 스키마 (http, https)
+        * hostname (whiteship.me, localhost)
+        * 포트 (8080, 18080)
+* 스프링 MVC @CrossOrigin : 스프링에서 CORS를 지원하기 위해서 원래는 여러가지 설정을 해야하지만, 스프링부트에서 그러한 설정을 해주기 때문에 @CrossOrigin을 바로 사용할 수 있음
+    * https://docs.spring.io/spring/docs/5.0.7.RELEASE/spring-framework-reference/web.html#mvc-cors
+    * @Controller나 @RequestMapping에 추가하거나
+    * WebMvcConfigurer 사용해서 글로벌 설정
 
 ## 섹션 4. 스프링 부트 운영
 
