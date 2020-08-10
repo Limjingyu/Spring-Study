@@ -800,6 +800,362 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
     * @Controller나 @RequestMapping에 추가하거나
     * WebMvcConfigurer 사용해서 글로벌 설정
 
+### 스프링 데이터 : 인메모리 데이터베이스
+* spring-boot-starter-jdbc 의존성 추가
+* 지원하는 인-메모리 DB
+    * H2(추천, 콘솔 때문에)
+    * HSQL
+    * Derby
+* Spring-JDBC가 클래스패스(의존성)에 있으면 자동 설정이 필요한 빈을 설정 해 줌
+    * DataSourceAutoConfiguration
+    * JdbcTemplateAutoConfiguration
+    * h2 db가 클래스패스에 들어있고 datasource 설정을 하지 않으면 spring boot가 알아서 in-memory db를 설정 해 준다
+* 인-메모리 DB 기본 연결 정보 확인하는 방법
+    * URL: "testdb"
+    * username: "sa"
+    * password: ""
+* H2 console 사용하는 방법
+    * spring-boot-devtools를 추가하거나
+    * spring.h2.console.enabled=true만 추가
+        * springboot 2.3부터 인메모리 db 설정이 매번 새로운 이름으로 만들어지도록 되어있어서 spring.datasource.generate-unique-name=false 을 application.properties에 추가해주어야 jdbc:h2:mem:testdb인 고정값으로 사용 가능하다
+    * localhost:8080/h2-console로 접속 (이 path도 변경 가능)
+* 실습 코드
+    * CREATE TABLE USER (ID INTEGER NOT NULL, name VARCHAR(255), PRIMARY KEY (id))
+    * INSERT INTO USER VALUES (1, 'keesun')
+    * java
+  ```java
+    @Component
+    public class H2Runner implements ApplicationRunner {
+        @Autowired
+        DataSource dataSource; // javax.sql.DataSource
+        @Autowired
+        JdbcTemplate jdbcTemplate;
+        @Override
+        public void run(ApplicationArguments args) throws Exception {
+            // 아래와 같이 사용하면 connection이라는 리소스를 try 블록 내에서 사용하고 정리해 줌. 명시적으로 finally를 적을 필요가 없음
+            try (Connection conn = dataSource.getConnection()) {
+                System.out.println(conn.getMetaData().getURL());
+                System.out.println(conn.getMetaData().getUserName());
+                Statement statement = conn.createStatement();
+                String sql = "CREATE TABLE USER (ID INTEGER NOT NULL, name VARCHAR(255), PRIMARY KEY (id))";
+                statement.executeUpdate(sql);
+            }
+            // 위의 방식으로 사용하는 jdbc api보다 jdbcTemplate을 이용하면 try/catch, 리소스 반환 등의 구현이 잘 되어있어서 이 방법이 더 좋다
+            jdbcTemplate.execute("INSERT INTO USER VALUES (1, 'keesun')");
+        }
+    }
+  ```
+
+### 스프링 데이터 : MySQL
+* 지원하는 DBCP // 아래 세 가지의 dbcp가 classpath에 있다면 HikariCP를 기본으로 사용
+    * HikariCP (default)
+        * https://github.com/brettwooldridge/HikariCP#frequently-used (db관련된 설정을 볼 수 있다)
+        * (참고) connection pool의 개수가 많더라도 실제 실행 가능한 connection은 cpu 개수만큼만 가능하다
+    * TomcapCP
+    * Commons DBCP2
+* DBCP설정
+    * spring.datasource.hikari.*
+    * spring.datasource.tomcat.*
+    * spring.datasource.dbcp2.*
+* MySQL connector 의존성 추가
+    * mysql-connector-java
+* MySQL 추가 (docker 사용)
+    * docker run -p 3306:3306 --name mysql_boot -e MYSQL_ROOT_PASSWORD=1 -e MYSQL_DATABASE=springboot -e MYSQL_USER=suhyeon -e MYSQL_PASSWORD=pass -d mysql
+    * docker exec -i -t mysql_boot bash
+    * mysql -u root -p
+* MySQL용 Datasource 설정
+    * spring.datasource.url=jdbc:mysql://localhost:3306/springboot?useSSL=false # 설정하지 않으면 in-memory db를 사용하려고 한다
+    * spring.datasource.username=suhyeon
+    * spring.datasource.password=pass
+    * 운영 DB용 설정
+        * spring.datasource.testWhileIdel=true
+        * spring.datasource.validationQuery=SELECT 1
+* MySQL은 상용으로 쓰기 위해 라이센스를 구매해야하고, GPL이므로 사용하는 코드의 공개 의무가 있다
+
+### 스프링 데이터 : PostgreSQL
+* 의존성 추가
+    * postgresql
+* application.properties 수정
+```sh
+		spring.datasource.url=jdbc:postgresql://localhost:5432/springboot
+		spring.datasource.username=root
+		spring.datasource.password=pass
+```
+* docker run -p 5432:5432 -e POSTGRES_PASSWORD=pass -e POSTGRES_USER=root -e POSGTRES_DB=springboot --name postgres_boot -d postgres
+```sh
+	docker exec -i -t postgres bash
+	su - postgres
+	psql springboot
+	#db 조회
+	\list
+	#table 조회
+	\dt
+	#query
+	SELECT *F ROM account;
+```
+
+### 스프링 데이터 : 스프링 데이터 JPA 소개
+* ORM(Object-Relational Mapping)과 JPA(Java Persistence API)
+    * 객체와 릴레이션을 맵핑할 때 발생하는 개념적 불일치를 해결하는 프레임워크
+    * http://hibernate.org/orm/what-is-an-orm
+    * JPA: ORM을 위한 자바(EE) 표준
+* Spring Data JPA
+    * Repository 빈 자동 생성
+    * 쿼리 메소드 자동 구현
+    * @EnableJpaRepositories(스프링 부트가 자동으로 설정해 줌)
+    * 계층 : SpringDataJpa -> JPA -> Hibernate -> Datasource(jdbc)
+
+### 스프링 데이터 : 스프링 데이터 JPA 연동
+* Spring Data JPA 의존성 추가
+    * spring-boot-starter-data-jpa
+* Spring Data JPA 사용하기
+    * @Entity class 만들기
+  ```java
+    @Entity
+    public class Account {
+        @Id @GeneratedValue
+        private Long id;
+
+        private String username;
+
+        private String password;
+        //getter, setter, equals, hashCode. Lombok을 사용하는 것도 추천
+    }
+  ```
+    * Repository 만들기
+			public interface AccountRepository extends JpaRepository<Account, Long> {
+			}
+* Spring Data repository test
+    * H2 DB를 테스트 의존성에 추가하기
+    * @DataJpaTest (슬라이트 테스트)작성
+  ```java
+    @RunWith(SpringRunner.class)
+    @DataJpaTest // repository bean들만 생성하여 테스트. in-memory db를 필요로 한다.
+    public class AccountRepositoryTest {
+        @Autowired
+        DataSource dataSource;
+        @Autowired
+        JdbcTemplate jdbcTemplate;
+        @Autowired
+        AccountRepository accountRepository;
+        @Test
+        public void di() {
+            Account account = new Account();
+            account.setUsername("suhyeon");
+            account.setPassword("pass");
+
+            Account newAccount = accountRepository.save(account);
+            assertThat(newAccount).isNotEmpty();
+            Account nonExistingAccount = accountRepository.findByUsername("asdf");
+            assertThat(nonExistingAccount).isEmpty();
+        }
+    }
+  ```
+    * @SpringBootTest를 이용한 integration test를 이용한다면?
+        * 모든 bean들을 생성하여 느림
+        * in-memory db를 사용하지 않고 직접 db를 띄워둔 상태에서 테스트를 진행해야 함
+        * 그리고 application.properties에 설정된 db의 값들이 테스트에 사용되어 변경됨
+
+### 스프링 데이터 : 데이터베이스 초기화
+* JPA를 사용한 데이터베이스 초기화
+    * 아래 두 가지 설정을 주어야 초기화 가능
+    * spring.jpa.hibernate.ddl-auto
+        * create-drop : 애플리케이션이 끝나고 스키마를 지움
+        * create : 지우고 새로 만듦
+        * update : 기존 스키마는 그대로 두고 추가된 것만 추가해 줌 (기존 데이터 유지)
+        * validate : ddl false로 두어야 함. 운영용으로 사용할 때. schema가 entity와 일치하는지 확인해 줌
+    * spring.jpa.generate-ddl=true로 설정해주어야 동작
+* ddl, dml 로깅하기
+    * spring.jpa.show-sql=true
+* SQL 스크립트를 사용한 데이터베이스 초기화
+    * resources 하위에 schema.sql 또는 schema-${platform}.sql를 생성하여 DDL을 적어두면 애플리케이션 실행 시 실행 됨
+    * ${platform} 값은 spring.datasource.platform으로 설정 가능
+
+### 스프링 데이터 : 데이터베이스 마이그레이션
+* Flyway와 Liquibase가 대표적인데 Flyway를 사용
+    * sql file들을 버전 관리 할 수 있다
+* https://docs.spring.io/spring-boot/docs/2.0.3.RELEASE/reference/htmlsingle/#howto-execute-flyway-database-migrations-on-startup
+* 의존성 추가
+    * org.flywaydb:flyway-core
+* 마이그레이션 디렉토리
+    * db/migration 또는 db/migration/{vendor} // postgers/mysql/...
+    * spring.flyway.locations로 변경 가능
+* 마이그레이션 파일 이름
+    * V숫자__이름.sql
+    * V는 반드시 대문자
+    * 숫자는 순차적으로 (타임스탬프 권장)
+    * 숫자와 이름 사이에 언다바 두 개
+    * 이름은 가능한 서술적으로
+* 스크립트 파일은 적용된 이후 절대 건드리면 안된다
+
+### 스프링 데이터 : Redis
+* 캐시, 메세지 브로커, 키/밸류 스토어 등으로 사용 가능
+* 의존성 추가
+    * spring-boot-starter-data-redis // spring boot 자동설정이 등록을 해줌
+* Redis 설치 및 실행(도커)
+    * docker run -p 6379:6379 --name redis_boot -d redis
+    * docker exec -it redis_boot redis-cli
+* spring data redis
+    * https://projects.spring.io/spring-data-redis/
+    * StringRedisTemplate 또는 RedisTemplate
+    * extends CrudRepository
+    * code
+  ```java
+    @Component
+    public class RedisRunner implements ApplicationRunner {
+        @Autowired
+        StringRedisTemplate redisTemplate;
+        @Override
+        public void run(ApplicationArguments args) {
+            ValueOperations<String, String> values = redisTemplate.opsForValue();
+            values.set("suhyeon", "kim");
+            values.set("springboot", "2.0");
+            values.set("hello","world");
+        }
+    }
+  ```
+* Redis 주요 커맨드
+    * https://redis.io/commands
+    * keys *
+    * get {key}
+    * hgetall {key}
+    * hget {key} {column}
+* 커스터마이징
+    * spring.redis.*
+        * port, url, ...
+* repository 생성
+  ```java
+    //entity
+    @RedisHash("accounts")
+    public class Account {
+        @Id
+        private String id;
+        private String username;
+        private string email;
+    }
+    //repository, CrudRepository는 redis특화가 아닌 spring jpa에서 제공하는 거의 최상위 계층의 인터페이스
+    public interface AccountRepository extends CrudRepository<Account, String> {
+    }
+  ```
+
+### 스프링 데이터 : MongoDB
+* MongoDb는 JSON기반의 도큐먼트 데이터베이스
+* 의존성 추가
+    * spring-boot-starter-data-mongodb
+* MongoDB설치 및 실행 (도커)
+    * docker run -p 27017:27017 --name mongo_boot -d mongo
+    * docker exec -i -t mongo_boot bash
+    * mongo
+* spring data mongo db
+    * MongoTemplate
+    * MongoRepository
+    * 내장형 MongoDB(테스트용)
+        * de.flapdoodle.embed:de.flapdoodle.embed.mongo
+    * @DataMongoTest
+    * 명령어
+        * db : db 조회
+        * use test : test라는 db 사용
+        * db.accounts.find({}) : accounts collection 조회
+* code
+    * 이번엔 ApplicationRunner를 main이 있는 클래스에 람다식으로 구현
+  ```java
+    @SpringBootApplication
+    public class SpringbootmongoApplication {
+        @Autowired
+        MongoTemplate mongoTemplate;
+        @Autowired
+        AccountRepository accountRepository;
+        psvm()
+        @Bean
+        public ApplicationRunner applicationRunner() {
+            return args -> {
+                Account account = new Account();
+                account.setEmail("asdf@gmail.com");
+                account.setUsername("aaa");
+                mongoTemplate.insert(account);
+                // or
+                accountRepository.insert(account);
+            };
+        }
+    }
+    //entity
+    @Document(collection = "accounts")
+    public class Account {
+        @Id
+        private String id;
+        private String username;
+        private String email;
+        // getter, setter
+    }
+    // repository도 사용 가능
+    public interface AccountRepository extends MongoRepository<Account, String>{}
+  ```
+
+* 내장형 mongo db를 사용하는 테스트 코드
+  ```java
+    @RunWith(SpringRunner.class)
+    @DataMongoTest
+    public class AccountRepositoryTest {
+        @Autowired
+        AccountRepository accountRepository;
+        @Test
+        public void findByEmail() {
+            Account account = new Account();
+            account.setUsername("suhyeon");
+            account.setEmail("suhyeon@gmail.com");
+
+            accountRepository.save(account);
+            Optional<Account> byId = accountRepository.findById(account.getId());
+            assertThat(byId).isNotEmpty();
+
+            Optional<Account> byEmail = accountRepository.findByEmail(account.getEmail());
+            assertThat(byEmail).isNotEmpty();
+        }
+    }
+  ```
+
+### 스프링 데이터 : Neo4j
+* Neo4j는 노드간의 연결 관계를 영속화 하는데 유리한 그래프 데이터 베이스
+* 의존성 추가
+    * spring-boot-starter-data-neo4j
+* Neo4j 설치 및 실행(도커)
+    * docker run -p 7474:7474 -p 7687:7687 -d --name neo4j_boot neo4j
+    * http://localhost:7474/browser
+* spring data Neo4J
+    * Neo4jTemplate(deprecated)
+    * SessionFactory
+    * Neo4jRepository
+* code
+  ```java
+    @Component
+    public class Neo4jRunner implements ApplicationRunner {
+        @Autowired
+        SessionFactory sessionFactory;
+        @Override
+        public void run(ApplicationArguments args) {
+            Account account = new Account();
+            account.setUsername("suhyeon");
+            account.setEmail("aaa@gmail.com");
+
+            Session session = sessionFactory.openSession();
+            session.save(account);
+            sessionFactory.close();
+        }
+    }
+    // entity
+    @NodeEntity
+    public class Account {
+        @Id @GeneratedValue
+        private Long id;
+        private String username;
+        private String email;
+        // getter, setter
+    }
+  ```
+
+### 스프링 데이터 : 정리
+* https://docs.spring.io/spring-boot/docs/current-SNAPSHOT/reference/htmlsingle/#boot-features-sql
+
 ## 섹션 4. 스프링 부트 운영
 
 ## 섹션 5. 마무리
