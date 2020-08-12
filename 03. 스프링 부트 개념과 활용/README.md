@@ -1182,7 +1182,41 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
 * 스프링 부트 시큐리티 테스트
     * https://docs.spring.io/spring-security/site/docs/current/reference/html/test-method.html
     * @WithMockUser
+    ```java
+    @RunWith(SpringRunner.class)
+    @WebMvcTest(HomeController.class)
+    public class HelloControllerTest {
     
+        @Autowired
+        MockMvc mockMvc;
+    
+        @Test
+        public void hello_without_user() throws Exception {
+            mockMvc.perform(get("/hello"))
+                    .andDo(print())
+                    .andExpect(status().isUnauthorized());
+        }
+    
+        @Test
+        @WithMockUser
+        public void hello() throws Exception {
+            mockMvc.perform(get("/hello"))
+                    .andDo(print())
+                    .andExpect(status().isOk())
+                    .andExpect(view().name("hello"));
+        }
+    
+        @Test
+        @WithMockUser
+        public void my() throws Exception {
+            mockMvc.perform(get("/my"))
+                    .andDo(print())
+                    .andExpect(status().isOk())
+                    .andExpect(view().name("my"));
+        }
+    }
+    ```
+  
 ### 스프링 시큐리티 2부: 시큐리티 설정 커스터마이징
 1. 웹 시큐리티 설정
     ```java
@@ -1191,22 +1225,58 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
     {
      @Override
      protected void configure(HttpSecurity http) throws Exception {
-     http.authorizeRequests()
-     .antMatchers("/", "/hello").permitAll()
-     .anyRequest().authenticated()
-     .and()
-     .formLogin()
-     .and()
-     .httpBasic();
+         http.authorizeRequests()
+             .antMatchers("/", "/hello").permitAll()
+             .anyRequest().authenticated()
+             .and()
+             .formLogin()
+             .and()
+             .httpBasic();
      }
     }
     ```
 2. UserDetailsServie 구현
     * Account DTO/Repository/Service 구현
     * https://docs.spring.io/spring-security/site/docs/current/reference/htmlsingle/#jc-authentication-userdetailsservice
+    ```java
+    @Service
+    public class AccountService implements UserDetailsService {
+    
+        @Autowired
+        private AccountRepository accountRepository;
+    
+        @Autowired
+        private PasswordEncoder passwordEncoder;
+    
+        public Account createAccount(String username, String password) {
+            Account account = new Account();
+            account.setUsername(username);
+            account.setPassword(passwordEncoder.encode(password));
+            return accountRepository.save(account);
+        }
+    
+        @Override
+        public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+            Optional<Account> byUserName = accountRepository.findByUserName(username);
+            Account account = byUserName.orElseThrow(() -> new UsernameNotFoundException(username));
+            return new User(account.getUsername(), account.getPassword(), authorities());
+        }
+    
+        private Collection<? extends GrantedAuthority> authorities() {
+            return Arrays.asList(new SimpleGrantedAuthority("ROLE_USER"));
+        }
+    }
+    ```
+
 3. PasswordEncoder 설정 및 사용
     * https://docs.spring.io/spring-security/site/docs/current/reference/htmlsingle/#core-services-password-encoding
-
+    ```java
+    @Bean
+        public PasswordEncoder passwordEncoder() {
+            return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+        }
+    ```
+  
 ### 스프링 REST 클라이언트 1부: RestTemplate과 WebClient
  : 해당내용은 부트에 기능은 아님. 단지 부트에서는 쉽게 쓸수있도록 기본적으로 빈을 등록을 해줌.
 * RestTemplate
@@ -1236,7 +1306,25 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
         * 글로벌 커스터마이징
             * WebClientCustomizer
             * 빈 재정의
+```java
+@SpringBootApplication
+public class WebclientApplication {
 
+    public static void main(String[] args) {
+        SpringApplication.run(WebclientApplication.class, args);
+    }
+
+    @Bean
+    public WebClientCustomizer webClientCustomizer() {
+        return webClientBuilder ->  webClientBuilder.baseUrl("http://localhost:8080");
+    }
+
+    @Bean
+    public RestTemplateCustomizer restTemplateCustomizer() {
+        return restTemplate -> restTemplate.setRequestFactory(new HttpComponentsClientHttpRequestFactory());
+    }
+}
+```
 ### 그밖에 다양한 기술 연동
 * 캐시
 * 메시징
@@ -1258,7 +1346,7 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
  : https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#production-ready-endpoints
 * 의존성 추가
     * spring-boot-starter-actuator
-* 애플리케이션의 각종 정보를 확인할 수 있는 Endpoints
+* 애플리케이션의 각종 정보를 확인할 수 있는 Endpoints(사용자나 디바이스같은 IT 서비스의 최종 목적지)
     * 다양한 Endpoints 제공.
     * JMX 또는 HTTP를 통해 접근 가능 함.
     * shutdown을 제외한 모든 Endpoint는 기본적으로 활성화 상태.
