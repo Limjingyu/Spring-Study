@@ -1156,8 +1156,166 @@ stand-alone application을 만드는 것이 spring boot의 목적, 내장 웹 �
 ### 스프링 데이터 : 정리
 * https://docs.spring.io/spring-boot/docs/current-SNAPSHOT/reference/htmlsingle/#boot-features-sql
 
-## 섹션 4. 스프링 부트 운영
+### 스프링 시큐리티 1부: Starter-Security
+ : spring-boot-starter-security 의존성 추가해주면 사용 가능
+ : 의존성을 추가하면 모든 요청에 인증을 필요로 함
+    302 from Login 관련 인증정보가 없을때, 자동으로 로그인화면으로 redirect (user/임시pw)
+    401
+* 스프링 시큐리티
+    * 웹 시큐리티
+    * 메소드 시큐리티
+    * 다양한 인증 방법 지원 :LDAP, 폼 인증, Basic 인증, OAuth, ...
+* 스프링 부트 시큐리티 자동 설정
+    * SecurityAutoConfiguration
+    * UserDetailsServiceAutoConfiguration
+    * spring-boot-starter-security
+        * 스프링 시큐리티 5.* 의존성 추가
+    * 모든 요청에 인증이 필요함.
+    * 기본 사용자 생성
+        * Username: user
+        * Password: 애플리케이션을 실행할 때 마다 랜덤 값 생성 (콘솔에 출력 됨.)
+        * spring.security.user.name
+        * spring.security.user.password
+    * 인증 관련 각종 이벤트 발생
+        * DefaultAuthenticationEventPublisher 빈 등록
+        * 다양한 인증 에러 핸들러 등록 가능
+* 스프링 부트 시큐리티 테스트
+    * https://docs.spring.io/spring-security/site/docs/current/reference/html/test-method.html
+    * @WithMockUser
+    
+### 스프링 시큐리티 2부: 시큐리티 설정 커스터마이징
+1. 웹 시큐리티 설정
+    ```java
+    @Configuration
+    public class WebSecurityConfig extends WebSecurityConfigurerAdapter
+    {
+     @Override
+     protected void configure(HttpSecurity http) throws Exception {
+     http.authorizeRequests()
+     .antMatchers("/", "/hello").permitAll()
+     .anyRequest().authenticated()
+     .and()
+     .formLogin()
+     .and()
+     .httpBasic();
+     }
+    }
+    ```
+2. UserDetailsServie 구현
+    * Account DTO/Repository/Service 구현
+    * https://docs.spring.io/spring-security/site/docs/current/reference/htmlsingle/#jc-authentication-userdetailsservice
+3. PasswordEncoder 설정 및 사용
+    * https://docs.spring.io/spring-security/site/docs/current/reference/htmlsingle/#core-services-password-encoding
 
-## 섹션 5. 마무리
+### 스프링 REST 클라이언트 1부: RestTemplate과 WebClient
+ : 해당내용은 부트에 기능은 아님. 단지 부트에서는 쉽게 쓸수있도록 기본적으로 빈을 등록을 해줌.
+* RestTemplate
+    * Blocking I/O 기반의 Synchronous API
+    * RestTemplateAutoConfiguration
+    * 프로젝트에 spring-web 모듈이 있다면 RestTemplateBuilder를 빈으로 등록해 줍니다.
+    * https://docs.spring.io/spring/docs/current/spring-framework-reference/integration.html#rest-client-access
+* WebClient
+    * Non-Blocking I/O 기반의 Asynchronous API
+    * WebClientAutoConfiguration
+    * 프로젝트에 spring-webflux 모듈이 있다면 WebClient.Builder를 빈으로 등록해줍니다.
+    * https://docs.spring.io/spring/docs/current/spring-framework-reference/web-reactive.html#webflux-client
+
+
+### 스프링 REST 클라이언트 2부: 커스터마이징
+* RestTemplate
+    * 기본으로 java.net.HttpURLConnection 사용.
+    * 커스터마이징
+        * 로컬 커스터마이징
+        * 글로벌 커스터마이징
+            * RestTemplateCustomizer
+            * 빈 재정의
+* WebClient
+    * 기본으로 Reactor Netty의 HTTP 클라이언트 사용.
+    * 커스터마이징
+        * 로컬 커스터마이징
+        * 글로벌 커스터마이징
+            * WebClientCustomizer
+            * 빈 재정의
+
+### 그밖에 다양한 기술 연동
+* 캐시
+* 메시징
+* Validation
+* 이메일 전송
+* JTA
+* 스프링 인티그레이션
+* 스프링 세션
+* JMX
+* 웹소켓
+* 코틀린
+* ...
+
+
+## 섹션 5. 스프링부트 운영
+스프링 부트는 애플리케이션 운영 환경에서 유용한 기능을 제공합니다. 스프링 부트가 제공하는 엔드포인트와 메트릭스 그리고 그 데이터를 활용하는 모니터링 기능에 대해 학습합니다.
+
+### 스프링 부트 Actuator 1부: 소개
+ : https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#production-ready-endpoints
+* 의존성 추가
+    * spring-boot-starter-actuator
+* 애플리케이션의 각종 정보를 확인할 수 있는 Endpoints
+    * 다양한 Endpoints 제공.
+    * JMX 또는 HTTP를 통해 접근 가능 함.
+    * shutdown을 제외한 모든 Endpoint는 기본적으로 활성화 상태.
+    * 활성화 옵션 조정
+        * management.endpoints.enabled-by-default=false
+        * management.endpoint.info.enabled=true
+
+### 스프링 부트 Actuator 2부: JMX와 HTTP
+* JConsole 사용하기
+    * https://docs.oracle.com/javase/tutorial/jmx/mbeans/
+    * https://docs.oracle.com/javase/7/docs/technotes/guides/management/jconsole.html
+* VisualVM 사용하기
+    * https://visualvm.github.io/download.html
+* HTTP 사용하기
+    * /actuator
+    * health와 info를 제외한 대부분의 Endpoint가 기본적으로 비공개 상태
+    * 공개 옵션 조정
+        * management.endpoints.web.exposure.include=*
+        * management.endpoints.web.exposure.exclude=env,beans
+
+### 스프링 부트 Actuator 3부: 스프링 부트 어드민
+ : https://github.com/codecentric/spring-boot-admin
+* 스프링 부트 Actuator UI 제공
+* 어드민 서버 설정
+    ```xml
+    <dependency>
+        <groupId>de.codecentric</groupId>
+        <artifactId>spring-boot-admin-starter-server</artifactId>
+        <version>2.0.1</version>
+    </dependency>
+    ```
+    @EnableAdminServer
+* 클라이언트 설정
+    ```xml
+    <dependency>
+        <groupId>de.codecentric</groupId>
+        <artifactId>spring-boot-admin-starter-client</artifactId>
+        <version>2.0.1</version>
+    </dependency>
+    ```
+    spring.boot.admin.client.url=http://localhost:8080 
+    management.endpoints.web.exposure.include=*
+    
+    
+## 섹션 6. 마무리
+* 스프링 부트 원리
+    * 의존성 관리
+    * 자동 설정
+    * 내장 웹 서버
+    * JAR 패키징
+* 스프링 부트 활용
+    * 스프링 부트 핵심 기능
+    * 다양한 기술 연동
+* 스프링 부트 운영
+    * Actuator
+    * 스프링 부트 어드민
+---
+
 
 ---
