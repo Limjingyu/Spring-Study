@@ -1,6 +1,369 @@
 # 04. 스프링 웹 MVC
 ## 섹션 0. 소개
 ## 섹션 1. 스프링 MVC 동작 원리
+### 스프링 MVC 소개
+* Model
+    * POJO
+    * Domain Object 또는 Data Transfer Object로 화면에 전달하거나 화면에서 전달 받은 데이터를 담고있는 객체
+* View
+    * HTML, JSP, thymeleaf, ...
+    * 데이터를 보여주는 역할. 다양한 형태로 보여줄 수 있다. HTML,JSON,XML 등
+* Controller
+    * spring @MVC
+    * 사용자 입력을 받아 모델 객체의 데이터를 변경하거나, 모델 객체를 뷰에 전달하는 역할
+        * 입력값 검증
+        * 입력 받은 데이터로 모델 객체 변경
+        * 변경된 모델 객체를 뷰에 전달
+* MVC 패턴의 장점
+    * 동시 다발적(Simultaneous) 개발 - 백엔드 개발자와 프론트엔드 개발자가 독립적으로 개발을 진행 할 수 있다
+    * 높은 결합도 : 논리적으로 관련있는 기능을 하나의 컨트롤러로 묶거나 특정 모델과 관련있는 뷰를 그룹화 가능
+    * 낮은 의존도 : 뷰, 모델, 컨트롤러는 각각 독립적 (예 : view는 HTML, JSON, XML 등으로 보여주지만 controller에서는 변화가 없어도 된다)
+    * 개발 용이성 : 책임이 구분되어있어 코드 수정이 용이
+    * 한 모델에 대한 여러 형태의 뷰를 가질 수 있다
+* MVC 패턴의 단점
+    * 코드 네비게이션 복잡함 (서비스 로직을 순서대로 따라가려면 내부 구현을 알고있어야 한다)
+    * 코드 일관성 유지에 노력이 필요
+    * 높은 학습 곡선
+* code
+```java
+@Controller
+public class EventController {
+    @Autowired
+    EventService eventService;
+    @GetMapping("/events")
+    public String events(Model model) {
+        // Model == Map
+        model.addAttribute("events", eventService.getEvnets());
+        return "events";
+    }
+}
+
+// Create model, POJO
+@Getter @Setter
+@Builder @NoArgsConsturctor @AllArgsConstructor
+public class Event {
+    private String name;
+    private limitOfEnrollment;
+    private LocalDateTime startDateTime;
+    private LocalDateTime endDateTime;
+}
+
+// EventService
+@Service
+public class EventService {
+    public List<Event> getEvents() {
+        Event event = Event.builder()
+            .name("Spring web MVC study")
+            .limitOfEnrollment(5)
+            .startDateTime(LocalDateTime.of(2019,1,10,12,0)
+            .endDateTime(LocalDateTime.of(2019,1,1612,0)
+            .build();
+        return List.of(event);
+}
+```
+
+```html
+<!--resources/templates/events.html-->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+    <h1>Event list</h1>
+    <table>
+        <tr>
+            <th>name</th>
+            <th>number of participaints</th>
+            <th>start</th>
+            <th>end</th>
+        </tr>
+        <tr th:each="event: ${events}">
+            <td th:text="${event.name}">event name</td>
+            <td th:text="${event.limitOfEnrollment}">100</td>
+            <td th:text="${event.startDateTime}">2020.01.10</td>
+            <td th:text="${event.endDateTime}">2020.01.10</td>
+        </tr>
+    </table>
+</body>
+</html>
+```
+ 
+### 서블릿 소개
+* 서블릿(Servlet)
+    * 자바 엔터프라이즈 에디션은 웹 애플리케이션 개발용 스펙과 API를 제공
+    * 요청 당 쓰레드(만들거나, 풀에서 가져다가) 사용
+    * 그 중에 가장 중요한 클래스 중 하나가 HttpServlet
+* 서블릿 등장 이전에 사용하던 기술인 CGI (Common Gateway Interface)
+    * 요청 당 프로세스를 만들어 사용
+* 서블릿의 장점(CGI)
+    * 빠르다
+    * 플랫폼(OS) 독립적
+    * 보안
+    * 이식성
+* 서블릿 엔진 또는 서블릿 컨테이너 (톰캣, 제티, 언더토우, ..)
+    * servlet의 스펙에 따라 구현한 컨테이너. servlet을 어떻게 초기화하고 실행하는지, 서블릿의 라이프 사이클을 관리할 줄 알고 있음
+    * 세션 관리
+    * 네트워크 서비스
+    * MIME 기반 메세지 인코딩 디코딩
+    * 서블릿 생명주기 관리
+    * ...
+    * servlet application은 우리가 실행할 수 있는게 아니라 servlet container가 실행해 주기 때문에 servlet container를 이용해야 한다
+* 서블릿 생명주기
+    * 서블릿 컨테이너가 서블릿 인스턴스의 init() 메서드를 호출하여 초기화
+        * 최초 요청을 받았을 때 한번 초기화 하고 나면 그 다음 요청부터는 이 과정을 생략
+    * 서블릿 초기화 된 다음부터 클라이언트 요청을 처리 가능, 각 요청은 별도의 쓰레드로 처리하고 이 때 서블릿 인스턴스의 service() 메서드를 호출
+        * 이 안에서 HTTP요청을 받고 클라이언트로 보낼 HTTP 응답을 만든다
+        * service()는 보통 HTTP Method에 따라 doGet(), doPost() 등으로 처리를 위임
+        * 따라서 보통 doGet() 또는 doPost()를 구현한다
+    * 서블릿 컨테이너 판단에 따라 해당 서블릿은 메모리에서 내려야 할 시점에 destroy()를 호출
+ 
+### 서블릿 애플리케이션 개발
+* 실제로 servlet을 개발할 일은 잘 없고 레거시 프로젝트에 들어가야한다면 필요할 듯
+* HttpServlet을 상속받는 HelloServlet을 만들고, init(), doGet(), destroy()를 구현한다. 그리고 servlet container(tomcat)를 달아주어 구현한 HelloServlet이 호출될 수 있도록 한다
+* application이 뜬 후 처음으로 해당 url에 요청이 들어오면 그제서야 init, doGet이 호출이되는 것을 보여주었고, 이후에 동일한 url로 요청이 오면 doGet만 호출이 된다. servlet container를 종료할 때 destroy가 호출된다.
+ 
+### 서블릿 리스너와 필터
+* servlet listener
+    * 웹 애플리케이션에서 발생하는 주요 이벤트를 감지하고 각 이벤트에 특별한 작업이 필요한 경우에 사용할 수 있다
+        * 서블릿 컨텍스트 수준의 이벤트
+            * 컨텍스트 라이프사이클 이벤트
+            * 컨텍스트 애트리뷰트 변경 이벤트
+        * 세션 수준의 이벤트
+            * 세션 라이프사이클 이벤트
+            * 세션 애트리뷰트 변경 이벤트
+        * 위의 4가지 이벤트들에 상응하는 리스너를 만들기 위한 방법은 각각 다르다
+    * 예시 : 서블릿 컨테이너가 구동될 때 db connection을 맺어놓고, servlet application이 만들어둔 여러 servlet에 제공해 줄 수 있고, 서블릿 컨테이너가 종료될 때의 이벤트에서 db connection을 닫아줄 수 있다
+* 서블릿 필터
+    * 들어온 요청을 서블릿으로 보낼 때, 또는 서블릿이 작성한 응답을 클라이언트로 보내기 전에 특별한 처리가 필요한 경우에 사용할 수 있다
+    * url pattern이나 특정 servlet에 적용 가능하다
+    * 체인 형태의 구조 (web.xml에 작성한 순서대로(아래의 A->B) filter가 적용된다.)
+
+* listener code
+```java
+public class MyListener implements ServletContextListener {
+    @Override
+    public void contextInitialized(ServletContextEvent sce) {
+        sout("context initialized");
+        sce.getServletContext().setAttribute("name", "suhyeon");
+    }
+    @Override
+    public void contextDestroyed(ServletCOntextEvent sce) {
+        sout("context destroyed");
+    }
+}
+
+```
+```html
+<!--web.xml-->
+<web-app>
+    <listener>
+        <listener-class>com.suhyeon.MyListener</listener-class>
+    </listener>
+</web-app>
+```
+
+* context가 먼저 초기화 되고나서 servlet의 init, doGet이 호출되고, 서블릿 컨테이너를 종료하면 서블릿의 destroy가 호출된 뒤 context destroyed가 호출된다
+* filter code
+```java
+import javax.servlet.*;
+public class MyFilter implements Filter {
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {
+        sout("Filter Init");
+    }
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response FilterChain chain) {
+        sout("Filter");
+        // 아래 코드가 없이는 다음 filter로 연결이 되지 않는다
+        chain.doFilter(request, response);
+    }
+    @Override
+    public void destroy() {
+        sout("Filter Destroy");
+    }
+}
+```
+```html
+<!--web.xml-->
+<web-app>
+    <filter>
+        <filter-name>myFilter</filter-name>
+        <filter-class>com.suhyeon.MyFilter</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>myFilter</filter-name>
+        <servlet-name>hello</servlet-name>
+    </filter-mapping>
+</web-app>
+```
+* 서블릿 컨테이너 실행 및 요청 시 : context init -> filter init -> (api call) -> servlet init -> filter -> doGet
+* 서블릿 컨테이너 종료 시 : servlet destroy -> filter destroy -> context destroy
+ 
+### 스프링 IoC 컨테이너 연동
+* 서블릿 애플리케이션에 스프링 연동하기
+    * 서블릿에서 스프링이 제공하는 IoC 컨테이너 활용하는 방법
+        * 의존성 추가 : spring-webmvc
+        * code
+```html
+<web-app>
+    <!--spring IoC container를 사용하기 위한 리스너 등록-->
+    <listener>
+        <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+    </listener>
+    <!--ContextLoaderListener가 contextClass인 AnnotationConfigWebApplicationContext를 contextConfigLocation 정보를 이용하여 만든다-->
+    <context-param>
+        <param-name>contextClass</param-name>
+        <param-value>org.springframework.web.context.support.AnnotationConfigWebApplicationContext</param-value>
+    </context-param>
+    <context-param>
+        <param-name>contextConfigLocation</param-name>
+        <param-value>com.suhyeon.AppConfig</param-value>
+    </context-param>
+</web-app>
+```
+* 이와 같이 설정하면, ContextLoaderListener가 Spring IoC container (ApplicationContext)를 <context-param>을 이용하여 만들어 주고, 생성된 bean들을 이제 servlet에서 사용할 수 있게 된다.
+* 만들어지는 위치는 servletContext이며, 사용하려면 아래와 같다
+```java
+ApplicationContext context = (ApplicationContext) getServletContext().getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
+HelloService helloService = context.getBean(HelloService.class);
+```
+* ContextLoaderListener는 servlet listener로 등록이 되는데, servlet listener의 역할이 servlet context lifecycle 단위로 실행 가능하므로 bean을 ContextLoaderListener가 ApplicationContext를 만들 수 있다
+* 스프링이 제공하는 서블릿 구현체 DispatcherServlet 사용하기
+* DispatcherServlet
+    * 스프링 MVC의 핵심
+    * Front Controller 역할
+        * 모든 요청을 하나의 controller가 받고, 적절한 handler에 분배(dispatch)하는 방식
+        * Front Controller 역할을 하는 서블릿을 spring에서 구현해 두었는데, 이게 DispatcherServlet이다
+    * DispatcherServlet은 Root WebApplicationContext를 상속받아서 내부에서 사용할 Servlet WebApplicationContext를 만든다. Root WebApplicationContext의 빈들은 Service, Respository들만 있는데, 이유는 각각의 Servlet WebApplicationContext에서 공통으로 사용하는 빈들이 Service, Repository들이고 웹과 관련된 빈들은 여러 DispatcherServlet에서 그안의 스코프에서 사용할 설정들을 두게 한다
+ 
+### 스프링 MVC 연동
+* 위에서 했던 방식은, servlet 에 Spring IoC container를 연동해 보았고, 이제는 spring MVC를 연동해 본다
+* ApplicationContext를 아래와 같이 구분하여 만들어야 한다. DispatcherServlet이 여러 개일 경우 이렇게 해야하는데, 이런 경우는 거의 없다. 대부분 하나의 DispatcherServlet을 이용하는 구조다
+```java
+@Configuration
+@ComponentScan(useDefaultFilters = false, excludeFilters = @ComponentScan.Filter(Controller.class))
+public class AppConfig {
+    // app 관련된 설정(모든 서블릿에서 사용할)은 Root WebApplicationContext에 빈으로 등록되어야 함
+}
+@Configuration
+@ComponentScan(useDefaultFilters = false, includeFilters = @ComponentScan.Filter(Controller.class))
+public class WebConfig {
+    // web 관련된 설정은 DistpatcherServlet 내부에서 사용하는 빈에 등록이 되어야 함
+}
+```
+* 반드시 부모/자식 관계의 WebApplicationContext를 만들지 않고 하나의 DispatcherServlet에 모든 빈을 등록하고 사용해도 된다. (DispatcherServlet을 하나만 사용할 경우)
+```html
+<web-app>
+    <servlet>
+        <servlet-name>app</servlet-name>
+        <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+        <init-param>
+            <param-name>contextClass</param-name>
+            <param-value>org.springframework.web.context.support.AnnotationContextWebApplicationContext</param-value>
+        </init-param>
+        <init-param>
+            <param-name>contextConfigLocation</param-name>
+            <param-value>com.suhyeon.WebConfig</param-value>
+        </init-param>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>app</servlet-name>
+        <url-pattern>/app/*</url-pattern>
+    </servlet-mapping>
+</web-app>
+```
+* spring은 servlet container(tomcat)안에 java 코드를 넣은 반면, spring boot는 boot인 java 코드에 내장으로 tomcat을 넣어두었다
+ 
+### DispatvcherServlet
+* 어떻게 해야 annotation기반으로 handler를 사용할 수 있는지 알아봄
+* DispatcherServlet 초기화
+    * 다음의 특별한 타입의 빈들을 찾거나 기본 전력에 해당하는 빈들을 등록
+        * HandlerMapping : 핸들러를 찾아주는 인터페이스
+        * HandlerAdapter : 핸들러를 실행하는 인터페이스
+        * HandlerExceptionResolver
+        * ViewResolver
+        * ...
+    * DispatcherServlet 동작 순서 (DispatcherServlet.doDispatch method를 보고 설명)
+        * 요청 분석 (로케일, 테마, 멀티파트 등)
+        * (핸들러 매핑에게 위임하여) 요청한 핸들러를 찾는다
+            * default로 가지는 핸들러 매핑은 BeanNameUrlHandlerMapping(org.springframework.web.servlet.mvc.Controller interface를 구현한 Controller를 처리), RequestMappingHandlerMapping(annotation기반 spring MVC handler를 처리)
+        * (등록되어 있는 핸들러 어댑터 중에) 해당 핸들러를 실행할 수 있는 "핸들러 어댑터"를 찾는다
+            * SimpleControllerHandlerAdapter : Controller interface를 구현하여 만든 Controller를 처리할 수 있다
+        * 찾아낸 "핸들러 어댑터"를 사용하여 핸들러의 응답을 처리한다
+            * 핸들러의 리턴값을 보고 어떻게 처리할지 판단한다
+                * ModelAndView 객체가 null이 아닌 경우, 뷰 이름에 해당하는 뷰를 찾아가서 모델 데이터를 렌더링한다
+                * ModelAndView 객체가 null인 경우, @ResponseEntity가 있다면 Converter를 사용하여 응답 본문을 만든다
+                * (참고) 리턴값의 타입에 따라 핸들러가 몇 가지 존재한다. @ResponseBody를 처리하기 위한 핸들러도 있다 
+        * (부가적으로) 예외 발생 시 예외처리 핸들러에 요청 처리를 위임한다
+        * 최종적으로 응답을 보낸다
+    *  예제 1 : RestController로 하나의 endpoint를 둔다
+        * 위의 2번에서 기본 핸들러 매핑인 RequestMappingHandlerMapping을 이용하게 된다
+        * 위의 4번에서 두 번째의 경우(converter를 이용하여 응답 본문을 만듦. model and view가 null이다)에 해당한다
+    * RequestMappingHandlerMapping example
+        * code
+            ```java
+            @Controller
+            public class HelloController {
+                @Autowired
+                HelloService helloService;
+                @GetMapping("/hello")
+                @ResponseBody
+                public String hello() { return "hello"; }
+                @GetMapping("/sample")
+                public String sample() { return "/WEB-INF/sample.jsp"; }
+            }
+            ```
+* /hello는 동작 순서 2번에서 RequestMappingHandlerMapping 핸들러를 사용, 4번에서는 @ResponseBody 애노테이션 때문에 ModelAndView객체가 null이므로 바로 string을 응답 본문으로 내려준다.
+* /sample은 동작 순서 2번에서 마찬가지로 RequestMappingHandlerMapping 핸들러를 사용(디버깅 중에는 selectHandler method 안에서 리턴되는 handler가 실제로는 ViewNameMethodReturnValueHandler던데?), 4번에서는 ModelAndView객체가 생성이 되어서 /WEB-INF/sample.jsp를 렌더링한다
+
+* BeanNameUrlHandlerMapping example
+    * code
+        ```java
+        @org.springframework.stereotype.Controller("/simple")
+        public class SimpleController implements Controller {
+            @Override
+            public ModelAndView handleRequest(HttpServletRequest request, HttpServletResponse response) {
+                return new ModelAndView("/WEB-INF/simple.jsp");
+            }
+        }
+        ```
+* 동작 방식 2번에서 BeanNameUrlHandlerMapping을 핸들러로 사용하고, 4번에서는 역시 ModelAndView객체가 있으므로 /WEB-INF/simple.jsp를 렌더링한다
+* 참고) @RestController는 각 controller method에 @ResponseBody 애노테이션을 단 것과 동일하다.
+* 참고) DispatcherServlet은 init과정을 거치는데, 여기서 각 HandlerMapping, HandlerAdapter 등을 기본 설정에 따라 빈으로 등록한다. 이 등록되는 빈을 변경할 수 있는 예제를 보여준다 (ViewResolver를 빈으로 등록하면서 기본 설정을 하는 코드)
+ 
+### 스프링 MVC 구성 요소
+* DispatcherServlet이 사용하는 interface를 살펴본다. DispatcherServlet이 초기화 될 때 아래 인터페이스들도 초기화 된다
+
+* DispatcherServlet의 기본 전략
+    * DispatcherServlet.properties file에 기록되어 있다
+* MultipartResolver
+    * 파일 업로드 요청 처리에 필요한 인터페이스
+    * HttpServletRequest를 MultipartHttpServletRequest로 변환해주어 요청이 담고있는 File을 꺼낼 수 있는 API 제공
+* LocaleResolver
+    * 클라이언트의 위치 정보를 파악하는 인터페이스
+    * 기본 전략(AcceptHeaderLocaleResolver)은 요청의 accept-language를 보고 판단
+* ThemeResolver
+    * 애플리케이션 설정된 테마를 파악하고 변경할 수 있는 인터페이스
+    * 예시 : 클릭 한번에 웹페이지의 테마(css)가 변경되는 것
+* HandlerMappings
+    * 요청을 처리할 핸들러를 찾는 인터페이스
+* HandlerAdapters
+    * HandlerMapping이 찾아낸 핸들러를 처리하는 인터페이스
+    * 스프링 MVC 확장력의 핵심
+    * Handler를 커스터마이징 가능하다. HandlerMapping, HandlerAdapter를 구현하면 된다
+* HandlerExceptionResolvers
+    * 요청 처리 중에 발생한 에러를 처리하는 인터페이스
+* RequestToViewNameTranslator
+    * 핸들러에서 뷰 이름을 명시적으로 리턴하지 않은 경우, 요청을 기반으로 뷰 이름을 판단하는 인터페이스
+    * Controller단에서 특정 View를 찾도록 그 이름을 리턴해주어야 하는데, 이 방법을 사용하면 view 이름을 가지고 실제 view를 찾아준다
+* ViewResolvers
+    * 뷰 이름(string)에 해당하는 뷰를 찾아내는 인터페이스
+* FlashMapManager
+    * FlashMap 인스턴스를 가져오고 저장하는 인터페이스
+    * FlashMap은 주로 리다이렉션을 사용할 때 매개변수를 사용하지 않고 데이터를 전달하고 정리할 때 사용
+    * 참고) 리다이렉션을 하는 이유는 파일 업로드와 같은 상황에서 브라우저를 리로드하면 또다시 파일 업로드 요청이 들어와버리므로, 업로드 요청 처리 후 get으로 리다이렉트 시켜서 form submission이 중복되지 않도록 한다
 
 ### 스프링 MVC 동작원리 정리
 * 결국엔 (굉장히 복잡한) 서블릿.
