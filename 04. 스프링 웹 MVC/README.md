@@ -705,3 +705,22 @@ afterCompletion 2
         * 캐싱, CSS 링크, HTML5 AppCache, ...
 * 스프링 부트
     * 기본 정적 리소스 핸들러와 캐싱 제공
+```java
+@Override
+public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    registry.addResourceHandler("/mobile/**")
+            .addResourceLocations("classpath:/mobile/")
+            .setCacheControl(CacheControl.maxAge(10, TimeUnit.MINUTES));
+}
+
+// test
+@Test
+public void helloStatic() throws Exception {
+    this.mockMvc.perform(get("/mobile/index.html"))
+            .andDo(print())
+            .andExpect(status().isOk())
+            .andExpect(content().string(Matchers.containsString("hello mobile")))
+            .andExpect(header().exists(HttpHeaders.CACHE_CONTROL))
+            ;
+}
+```
