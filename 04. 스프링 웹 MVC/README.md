@@ -808,8 +808,8 @@ public void helloStatic() throws Exception {
         * 보안 이슈 (Reflacted File Download attack)
         * URI 변수, Path 매개변수, URI 인코딩을 사용할 때 불명확 함
     * 참고 : 과거에는 uri에 파일 확장자명을 주어 요청을 주었으나, 요즘은 header정보에서 확장자를 나타낸다
- 
-[ 요청 맵핑하기 - MediaType ]
+
+### 요청 맵핑하기 - MediaType
 * 특정한 타입의 데이터를 담고 있는 요청만 처리하는 핸들러
     * @RequestMapping(consumes="application/json")
     * Content-Type header로 필터링
@@ -823,7 +823,7 @@ public void helloStatic() throws Exception {
         * 참고 : 핸들러가 application/json;charset=UTF-8을 받더라도 요청을 application/json으로 보내면 응답을 준다
 * 클래스에 선언한 @RequestMapping에 사용한 것과 조합이 되지 않고 메소드에 사용한 @RequestMapping의 설정으로 엎어쓴다
  
-[ 요청 맵핑하기 - 헤더와 매개변수 ]
+### 요청 맵핑하기 - 헤더와 매개변수
 * 특정 헤더가 있는 요청을 처리하고 싶은 경우
     * @RequestMapping(header = "key")
 * 특정 헤더가 없는 요청을 처리하고 싶은 경우
@@ -848,7 +848,7 @@ public class SampleController {
 }
 ```
  
-[ 요청 맵핑하기 - HEAD와 OPTIONS ]
+### 요청 맵핑하기 - HEAD와 OPTIONS
 * 우리가 구현하지 않아도 스프링 웹 MVC에서 자동으로 처리하는 HTTP Method
     * HEAD
         * GET요청과 동일하지만 응답에 본문을 빼고 헤더만 받아온다
@@ -907,7 +907,7 @@ public class SampleController {
 * result : status=200, Headers = [Allow:"GET,HEAD,POST,OPTIONS"], Body=<empty>
 * 참고 : spring framework testcode를 보고 hasItems를 찾더라..
  
-[ 요청 맵핑하기 - Custom annotation ]
+### 요청 맵핑하기 - Custom annotation
 * @RequestMapping 애노테이션을 메타 애노테이션으로 사용하기
     * @GetMapping 같은 커스텀한 애노테이션을 만들 수 있다.
 * Meta annotation
