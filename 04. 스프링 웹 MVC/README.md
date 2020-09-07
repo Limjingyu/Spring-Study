@@ -724,3 +724,228 @@ public void helloStatic() throws Exception {
             ;
 }
 ```
+
+## 섹션 3. 스프링 MVC 활용
+### 스프링 MVC 활용 소개
+ 
+### 요청 맵핑하기 - HTTP Method
+* Http요청을 handler에 맵핑하는 방법
+* @Controller ... @RequestMapping을 설정한 함수가 모두 핸들러가 된다
+    * @RequestMapping에 HttpMethod를 지정하지 않으면 모든 HttpMethod를 사용 가능
+   ```java
+   //controller
+   @Controller
+   public class SampleController {
+       @RequestMapping("/hello") // RequestMethod로 특정 HttpMethod 지정 가능, 다른 HttpMethod를 보내면 405 응답을 줌. get만 받으려면@GetMapping으로도 사용 가능
+       @ResponseBody
+       public String hello() {
+           return "hello";
+       }
+   }
+   // test
+   @RunWith(SpringRunner.class)
+   @WebMvcTest
+   public class SampleControllerTest {
+       @Autowired
+       MockMvc mockMvc;
+       @Test
+       public void helloTest() throws Exception {
+           mockMvc.perform(get("/hello"))
+                   .andDo(print())
+                   .andExpect(status().isOk())
+                   .andExpect(content().string("hello"));
+       }
+   }
+   ```
+* HttpMethods
+    * Get
+        * 클라이언트가 서버의 리소스를 요청할 때 사용
+        * 캐싱
+        * 브라우저 기록에 남음
+        * 북마크 가능
+        * 민감데이터를 주고받을때는 사용 x
+        * Idempotent 멱등성, 동일한 GET요청에는 동일한 응답을 주어야 한다
+    * Post
+        * 클라이언트가 서버의 리소스를 수정하거나 새로 만들 때 사용
+        * 서버에 보내는 데이터를 POST 요청 본문에 담는다
+        * 캐싱 x
+        * 브라우저 기록에 남지 않음
+        * 북마크 x
+        * 데이터 길이 제한 x
+        * Idempotent하지 않을 수 있다
+    * Put
+        * URI에 해당하는 데이터를 새로 만들거나 수정할 때 사용
+        * Post와 다른점
+            * Post의 URI는 보내는 데이터를 처리할 수 있는 리소스를 지칭
+            * Put의 URI는 보내는 데이터에 해당하는 리소스를 지칭
+        * Idempotent
+    * Patch
+        * Put과 비슷하지만 서버에 있는 데이터의 일부만 변경할 때 그 일부에 대한 내용만 보낸다
+        * Idempotent
+    * Delete
+        * URI에 해당하는 리소스를 삭제할 때 사용
+        * Idempotent
+ 
+### 요청 맵핑하기 - URI Pattern
+* URI, URL, URN
+    * https://stackoverflow.com/questions/176264/what-is-the-difference-betwwen-a-uri-a-url-and-a-urn
+* 요청 식별자로 맵핑하기
+    * @ReqeustMapping은 다음 패턴을 지원
+    * ? : 한 글자 (/author/??? => /author/123)
+    * * : 여러 글자 (/author/* => /author/suhyeon)
+    * ** : 여러 패스 (/author/** => /author/suhyeon/book)
+* 클래스에 선언한 @RequestMapping과 조합
+    * 클래스에 선언한 URI 패턴뒤에 이어 붙여서 맵핑
+* 정규 표현식으로 맵핑 가능
+    * /{name:정규식}
+* 패턴이 중복되는 경우?
+    * 가장 구체적으로 맵핑되는 핸들러를 선택함
+    * ex. /hello/suhyeon, /hello/** 두 개의 핸들러가 있을 때 /hello/suhyeon으로 요청이 들어오면 전자의 핸들러를 사용한다
+* URI 확장자 맵핑 지원
+    * spring mvc에서는 "/hello/suhyeon" 핸들러가 있을 때, 암묵적으로 "hello/suhyeon.*" ("/hello/suhyeon.json" 등)을 핸들러로 등록한다(spring boot에서는 기본적으로 이 기능을 사용하지 않도록 설정 해 줌)
+        * "/hello/suhyeon.zip"을 요청하면 브라우저가 파일 다운로드를 실행해버림
+    * 이 기능은 권장 x 
+        * 보안 이슈 (Reflacted File Download attack)
+        * URI 변수, Path 매개변수, URI 인코딩을 사용할 때 불명확 함
+    * 참고 : 과거에는 uri에 파일 확장자명을 주어 요청을 주었으나, 요즘은 header정보에서 확장자를 나타낸다
+ 
+[ 요청 맵핑하기 - MediaType ]
+* 특정한 타입의 데이터를 담고 있는 요청만 처리하는 핸들러
+    * @RequestMapping(consumes="application/json")
+    * Content-Type header로 필터링
+    * 매치 되지 않는 경우에 415 Not Supported MediaType
+* 특정한 타입의 응답을 만드는 핸들러
+    * @RequestMapping(produces="application/json")
+    * Accept header로 필터링, (client에서 accept type을 주지 않으면 전부 받겠다는 의미가 되는데, server에서 어떤 MedeaType을 produces로 설정해도 다 받게된다.)
+    * 매치 되지 않는 경우에 406 Not Supported응답
+* 문자열을 입력하는 대신 MedeaType(com.springframework.http)를 이용하면 상수를 IDE 자동완성으로 사용 가능
+    * MediaType.APPLICATION_JSON_UTF8_VALUE : application/json;charset=UTF-8
+        * 참고 : 핸들러가 application/json;charset=UTF-8을 받더라도 요청을 application/json으로 보내면 응답을 준다
+* 클래스에 선언한 @RequestMapping에 사용한 것과 조합이 되지 않고 메소드에 사용한 @RequestMapping의 설정으로 엎어쓴다
+ 
+[ 요청 맵핑하기 - 헤더와 매개변수 ]
+* 특정 헤더가 있는 요청을 처리하고 싶은 경우
+    * @RequestMapping(header = "key")
+* 특정 헤더가 없는 요청을 처리하고 싶은 경우
+    * @RequestMapping(header = "!key")
+* 특정 헤더 키/값이 있는 요청을 처리하고 싶은 경우
+    * @RequestMapping(header = "key=value")
+* 특정 요청 매개변수 키를 가지고 있는 요청을 처리하고 싶은 경우
+    * @RequestMapping(params = "a")
+* 특정 요청 매개변수가 없는 요청을 처리하고 싶은 경우
+    * @RequestMapping(params = "a")
+* 특정 요청 매개변수 키/값을 가지고 있는 요청을 처리하고 싶은 경우
+    * @RequestMapping(params = "a=b")
+* code
+```java
+@Controller
+public class SampleController {
+   @GetMapping(value="/hello", headers = HttpHeaders.FROM + "=" + "111")
+   @RequestBody
+   public String hello() {
+      return "hello";
+   }
+}
+```
+ 
+[ 요청 맵핑하기 - HEAD와 OPTIONS ]
+* 우리가 구현하지 않아도 스프링 웹 MVC에서 자동으로 처리하는 HTTP Method
+    * HEAD
+        * GET요청과 동일하지만 응답에 본문을 빼고 헤더만 받아온다
+   ```java
+      @Controller
+      public class SampleController {
+         @GetMapping(value="/hello")
+         @RequestBody
+         public String hello() {
+            return "hello";
+         }
+      }
+      @Test
+      public void helloTest() throws Exception {
+         mockMvc.perform(head("/hello")
+                  .param("name", "suhyeon")
+            .andDo(print())
+            .andExpect(status().isOk());
+      }
+   ```
+* result : status=200, Headers=[Content-Type:"text/plain;charset=UTF-8", Content-Length:"5"], Body=<empty>
+
+* OPTIONS
+    * 사용할 수 있는 HTTP Method 제공
+    * 서버 또는 특정 리소스가 사용하는 기능을 확인, 해당 서버가 살아있는지 확인할 수 있다
+    * 서버는 Allow 응답 헤더에 사용할 수 있는 HTTP Method목록을 제공해야 한다
+   ```java
+      @Controller
+      public class SampleController {
+         @GetMapping(value="/hello")
+         @RequestBody
+         public String hello() {
+            return "hello";
+         }
+         @PostMapping(value="/hello")
+         @RequestBody
+         public String hello() {
+            return "hello";
+         }
+      }
+      @Test
+      public void helloTest() throws Exception {
+         mockMvc.perform(options("/hello")
+                  .param("name", "suhyeon")
+            .andDo(print())
+            .andExpect(status().isOk())
+            .andExpect(header().exists(HttpHeaders.ALLOW)
+            .andExpect(header().stringValues(HttpHeaders.ALLOW, 
+               hasItems(containsString("GET"),
+                     containsString("POST"),
+                     containsString("HEAD"),
+                     containsString("OPTIONS"),)
+            ));
+      }
+   ```
+* result : status=200, Headers = [Allow:"GET,HEAD,POST,OPTIONS"], Body=<empty>
+* 참고 : spring framework testcode를 보고 hasItems를 찾더라..
+ 
+[ 요청 맵핑하기 - Custom annotation ]
+* @RequestMapping 애노테이션을 메타 애노테이션으로 사용하기
+    * @GetMapping 같은 커스텀한 애노테이션을 만들 수 있다.
+* Meta annotation
+    * 애노테이션에 사용할 수 있는 애노테이션, ex : GetMapping안에 보면 또 다른 애노테이션이 붙어있다
+    * 스프링이 제공하는 대부분의 애노테이션은 메타 애노테이션으로 사용할 수 있다
+* 조합(Composed) 애노테이션
+    * 한 개 혹은 여러 메타 애노테이션을 조합해서 만든 애노테이션. ex : GetMapping
+    * 코드를 간결하게 줄일 수 있다
+    * 보다 구체적인 의미를 부여할 수 있다
+* @Retention
+    * 해당 애노테이션 정보를 언제까지 유지할 것인가
+    * Source : 소스코드까지만 유지, 즉 컴파일 하면 해당 애노테이션 정보는 사라짐
+    * Class : 컴파일 한 .class파일에도 유지, 즉 런타임 시 클래스를 메모리로 읽어오면 해당 정보는 사라짐
+    * Runtime : 클래스를 메모리에 읽어왔을 때까지 유지, 코드에서 이 정보를 바탕으로 특정 로직 수행해야 할 때 사용
+* @Target
+    * 해당 애노테이션을 어디에 사용할 수 있는지 결정
+* @Documentated
+    * 해당 애노테이션을 사용한 코드의 문서(javadoc)에 그 애노테이션에 대한 정보를 표기할 지 결정
+* 메타 애노테이션
+    * https://docs.spring.io/spring/docs/current/spring-framework-reference/core.html#beans-meta-annotations https://docs.spring.io/spring/docs/current/javadoc-api/org/springframework/core/annotation/AliasFor.html 
+* code
+```java
+// custom annotation
+@Documented // javadoc
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME) // default = CLASS. it should be set as a RUNTIME. If not, controller cannot use hello handler.
+@RequestMapping(method = RequestMethod.GET, value = "/hello")
+public @interface GetHelloMapping{
+}
+// controller
+@Controller
+public class SampleController {
+   @GetHelloMapping
+   @ResponseBody
+   public String hello() {
+      return "hello";
+   }
+}
+```
+ 
+### 요청 맵핑하기 - 연습 문제
