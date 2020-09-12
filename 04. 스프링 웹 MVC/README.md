@@ -949,3 +949,333 @@ public class SampleController {
 ```
  
 ### 요청 맵핑하기 - 연습 문제
+
+### 핸들러 메소드 1부: 지원하는 메소드 아규먼트와 리턴 타입
+* 핸들러 메소드 아규먼트: 주로 요청 그 자체 또는 요청에 들어있는 정보를 받아오는데 사용한다.
+    * @PathVariable
+    * @RequestParam
+    * @RequestBody
+    * @ModelAttribute
+    * ...
+    * 참고: https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-arguments
+* 핸들러 메소드 리턴: 주로 응답 또는 모델을 랜더링할 뷰에 대한 정보를 제공하는데 사용한다.
+    * @ResponseBody : 리턴 값을 HttpMessageConverter를 사용해 응답 본문으로 사용한다.
+    * HttpEntity/ReponseEntity : 응답 본문 뿐 아니라 헤더 정보까지, 전체 응답을 만들 때 사용한다.
+    * String : ViewResolver를 사용해서 뷰를 찾을 때 사용할 뷰 이름.
+    * View : 암묵적인 모델 정보를 랜더링할 뷰 인스턴스
+    * Map/Model : (RequestToViewNameTranslator를 통해서) 암묵적으로 판단한 뷰 랜더링할 때 사용할 모델 정보
+    * @ModelAttribute : (RequestToViewNameTranslator를 통해서) 암묵적으로 판단한 뷰 랜더링할 때 사용할 모델 정보에 추가한다.(이 애노테이션은 생략할 수 있다.)
+    * ModelAndView
+    * ...
+    * 참고: https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-returntypes
+### 핸들러 메소드 2부: URI 패턴
+* @PathVariable
+    * 요청 URI 패턴의 일부를 핸들러 메소드 아규먼트로 받는 방법.
+    * 타입 변환 지원.
+    * (기본)값이 반드시 있어야 한다.
+    * Optional 지원.
+    * @PathVariable **("id")** 를 적어주면 변수명 다르게 사용가능. (아닐경우, 일치시켜야함)
+    ```java
+    @GetMapping("/hi/{id}")
+    @ResponseBody
+    public String hi(@PathVariable("id") String idString) {
+        return idString;
+    }
+    ```
+* @MatrixVariable
+    * 요청 URI 패턴에서 키/값 쌍의 데이터를 메소드 아규먼트로 받는 방법
+    * 타입 변환 지원.
+    * (기본)값이 반드시 있어야 한다.
+    * Optional 지원.
+    * 이 기능은 기본적으로 비활성화 되어 있음. 활성화 하려면 다음과 같이 설정해야 함.
+    ```java
+    @Configuration
+    public class WebConfig implements WebMvcConfigurer {
+        @Override
+        public void configurePathMatch(PathMatchConfigurer configurer) {
+            UrlPathHelper urlPathHelper = new UrlPathHelper();
+            urlPathHelper.setRemoveSemicolonContent(false);
+            configurer.setUrlPathHelper(urlPathHelper);
+        }
+    }
+
+    ```
+### 핸들러 메소드 3부: @RequestMapping
+* @RequestParam
+    * 요청 매개변수에 들어있는 단순 타입 데이터를 메소드 아규먼트로 받아올 수 있다.
+    * 값이 반드시 있어야 한다.
+        * required=false 또는 Optional을 사용해서 부가적인 값으로 설정할 수도 있다.
+    * String이 아닌 값들은 타입 컨버전을 지원한다.
+    * Map<String, String> 또는 MultiValueMap<String, String>에 사용해서 모든 요청 매개변수를 받아 올 수도 있다.
+    * 이 애노테이션은 생략 할 수 잇다. (비추천)
+* 요청 매개변수란?
+    * 쿼리 매개변수
+    * 폼 데이터
+    * 아래처럼 컨트롤러 있을때, `/hi?name=jingyu` 또는 body에 `name=jingyu` 모두 동일하게 처리 한다.
+        ```java
+        @GetMapping("/hi")
+        @ResponseBody
+        public String hi(@RequestParam String name) {
+            return name;
+        }
+        ```
+
+### 핸들러 메소드 4부: 폼 서브밋 (타임리프)
+* 폼을 보여줄 요청 처리
+    * GET /events/form
+    * 뷰: events/form.html
+    * 모델: “event”, new Event()
+* 타임리프
+    * @{}: URL 표현식
+    * ${}: variable 표현식
+    * *{}: selection 표현식
+
+### 핸들러 메소드 5부: @ModelAttribute
+*@ModelAttribute
+    * 여러 곳에 있는 단순 타입 데이터를 복합 타입 객체로 받아오거나 해당 객체를 새로 만들 때 사용할 수 있다.
+    * 여러 곳? URI 패스, 요청 매개변수, 세션 등
+    * 생략 가능 (비추천)
+*값을 바인딩 할 수 없는 경우에는?
+    * BindException 발생 400 에러
+*바인딩 에러를 직접 다루고 싶은 경우
+    * BindingResult 타입의 아규먼트를 바로 오른쪽에 추가한다.
+*바인딩 이후에 검증 작업을 추가로 하고 싶은 경우
+    * @Valid 또는 @Validated 애노테이션을 사용한다.
+    
+### 핸들러 메소드 6부: @Validated
+* 스프링 MVC 핸들러 메소드 아규먼트에 사용할 수 있으며 validation group이라는 힌트를 사용할 수 있다.
+* @Valid 애노테이션에는 그룹을 지정할 방법이 없다.
+* @Validated는 스프링이 제공하는 애노테이션으로 그룹 클래스를 설정할 수 있다.
+
+### 핸들러 메소드 7부: 폼 서브밋 (에러 처리)
+* 바인딩 에러 발생 시 Model에 담기는 정보
+    * Event
+    * BindingResult.event
+* 타임리프 사용시 바인딩 에러 보여주기
+    ```
+    <p th:if="${#fields.hasErrors('limit')}" th:errors="*{limit}">Incorrect date</p>
+    ```
+* Post / Redirect / Get 패턴
+    * https://en.wikipedia.org/wiki/Post/Redirect/Get
+    * Post 이후에 브라우저를 리프래시 하더라도 폼 서브밋이 발생하지 않도록 하는 패턴
+* 타임리프 목록 보여주기
+    ```
+    <a th:href="@{/events/form}">Create New Event</a>
+    <div th:unless="${#lists.isEmpty(eventList)}">
+        <ul th:each="event: ${eventList}">
+            <p th:text="${event.Name}">Event Name</p>
+        </ul>
+    </div>
+    ```
+    
+### 핸들러 메소드 8부: @SessionAttributes
+* 모델 정보를 HTTP 세션에 저장해주는 애노테이션
+    * HttpSession을 직접 사용할 수도 있지만
+    * 이 애노테이션에 설정한 이름에 해당하는 모델 정보를 자동으로 세션에 넣어준다.
+    * @ModelAttribute는 세션에 있는 데이터도 바인딩한다.
+    * 여러 화면(또는 요청)에서 사용해야 하는 객체를 공유할 때 사용한다.
+* SessionStatus를 사용해서 세션 처리 완료를 알려줄 수 있다.
+    * 폼 처리 끝나고 세션을 비울 때 사용한다.
+```java
+@Controller
+@SessionAttributes("events")
+public class SampleController {
+
+    @PostMapping("events")
+    public String createEvent(@Validated @ModelAttribute Event event,
+                              BindingResult bindingResult,
+                              SessionStatus sessionStatus) {
+        if (bindingResult.hasErrors()) {
+            return "/events/form";
+        }
+        //save
+
+        sessionStatus.setComplete();
+
+        return "redirect:/events/list";
+    }
+
+}
+```
+
+### 핸들러 메소드 9부: 멀티 폼 서브밋
+* 세션을 사용해서 여러 폼에 걸쳐 데이터를 나눠 입력 받고 저장하기
+    * 이벤트 이름 입력받고
+    * 이벤트 제한 인원 입력받고
+    * 서브밋 -> 이벤트 목록으로!
+* 완료된 경우에 세션에서 모델 객체 제거하기
+    * SessionStatus
+    
+### 핸들러 메소드 10부: @SessionAttribute
+* HTTP 세션에 들어있는 값 참조할 때 사용
+    * HttpSession을 사용할 때 비해 타입 컨버전을 자동으로 지원하기 때문에 조금 편리함.
+    * HTTP 세션에 데이터를 넣고 빼고 싶은 경우에는 HttpSession을 사용할 것.
+* @SessionAttributes와는 다르다.
+    * @SessionAttributes는 해당 컨트롤러 내에서만 동작.
+        * 즉, 해당 컨트롤러 안에서 다루는 특정 모델 객체를 세션에 넣고 공유할 때 사용.
+    * @SessionAttribute는 컨트롤러 밖(인터셉터 또는 필터 등)에서 만들어 준 세션 데이터에 접근할 때 사용한다.
+```java
+// interceptor
+public class VisitTimeInterceptor implements HandlerInterceptor {
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        HttpSession httpSession = request.getSession();
+        if (httpSession.getAttribute("visitTime") == null) {
+            httpSession.setAttribute("visitTime", LocalDateTime.now());
+        }
+        return true;
+    }
+}
+
+//controller
+@GetMapping("/hi")
+@ResponseBody
+public String hi(@RequestParam String name, @SessionAttribute LocalDateTime visitTime) {
+    System.out.println(visitTime);
+    return name;
+}
+```
+
+### 핸들러 메소드 11부: RedirectAttributes
+* 리다이렉트 할 때 기본적으로 Model에 들어있는 primitive type 데이터는 URI 쿼리 매개변수에 추가된다.
+    * 스프링 부트에서는 이 기능이 기본적으로 비활성화 되어 있다.
+    * Ignore-default-model-on-redirect 프로퍼티를 사용해서 활성화 할 수 있다.
+* 원하는 값만 리다이렉트 할 때 전달하고 싶다면 RedirectAttributes에 명시적으로 추가할 수 있다.
+* 리다이렉트 요청을 처리하는 곳에서 쿼리 매개변수를 @RequestParam 또는 @ModelAttribute로 받을 수 있다.
+```java
+redirectAttributes.addAttribute("name", name);
+redirectAttributes.addAttribute("limit", limit);
+```
+
+### 핸들러 메소드 12부: Flash Attributes
+* 주로 리다이렉트시에 데이터를 전달할 때 사용한다.
+    * 데이터가 URI에 노출되지 않는다.
+    * 임의의 객체를 저장할 수 있다.
+    * 보통 HTTP 세션을 사용한다.
+* 리다이렉트 하기 전에 데이터를 HTTP 세션에 저장하고 리다이렉트 요청을 처리 한 다음 그 즉시 제거한다.
+* RedirectAttributes를 통해 사용할 수 있다.
+```java
+redirectAttributes.addFlashAttribute("newEvent", event);
+
+//test
+@Test
+public void getEvents() throws Exception {
+    Event newEvent = new Event();
+    newEvent.setName("SPRING MVC");
+    newEvent.setLimit(2);
+
+    this.mockMvc.perform(get("/events/list")
+                    .sessionAttr("visitTime", LocalDateTime.now())
+                    .flashAttr("newEvent", newEvent))
+            .andDo(print())
+            .andExpect(status().isOk());
+    
+}
+```
+
+### 핸들러 메소드 13부: 파일 업로드 MultipartFile
+* MultipartFile
+    * 파일 업로드시 사용하는 메소드 아규먼트
+    * MultipartResolver 빈이 설정 되어 있어야 사용할 수 있다. (스프링 부트 자동 설정이 해 줌)
+    * POST multipart/form-data 요청에 들어있는 파일을 참조할 수 있다.
+    * List<MultipartFile> 아큐먼트로 여러 파일을 참조할 수도 있다.
+* 파일 업로드 폼
+```html
+<form method="POST" enctype="multipart/form-data" action="#" th:action="@{/file}">
+    File: <input type="file" name="file"/>
+    <input type="submit" value="Upload"/>
+</form>
+```
+* 파일 업로드 처리 핸들러
+```java
+@PostMapping("/file")
+public String uploadFile(@RequestParam MultipartFile file,
+                            RedirectAttributes attributes) {
+    // save
+
+    String message = file.getOriginalFilename() + " is uploaded.";
+    attributes.addFlashAttribute("message", message);
+    return "redirect:/file";
+}
+```
+* 메시지 출력
+```html
+<div th:if="${message}">
+    <h2 th:text="${message}"/>
+</div>
+```
+* TEST
+```java
+@Test
+public void fileUploadTest() throws Exception {
+    MockMultipartFile file = new MockMultipartFile("file", "test.txt", "text/plain", "JINGYU".getBytes());
+    this.mockMvc.perform(multipart("/file").file(file))
+            .andDo(print())
+            .andExpect(status().is3xxRedirection());
+}
+```
+* 파일 업로드 관련 스프링 부트 설정
+    * MultipartAutoConfiguration
+    * MultipartProperties
+    
+### 핸들러 메소드 14부: 파일 다운로드 ResponseEntity
+* 파일 리소스를 읽어오는 방법
+    * 스프링 ResourceLoader 사용하기
+* 파일 다운로드 응답 헤더에 설정할 내용
+    * Content-Disposition: 사용자가 해당 파일을 받을 때 사용할 파일 이름
+    * Content-Type: 어떤 파일인가
+    * Content-Length: 얼마나 큰 파일인가
+* 파일의 종류(미디어 타입) 알아내는 방법
+    * http://tika.apache.org/
+* ResponseEntity
+    * 응답 상태 코드
+    * 응답 헤더
+    * 응답 본문
+```java
+@GetMapping("/file/{filename}")
+@ResponseBody
+public ResponseEntity<Resource> downloadFile(@PathVariable String filename) throws IOException {
+    Resource resource = resourceLoader.getResource("classpath:" + filename);
+    File file = resource.getFile();
+
+    Tika tika = new Tika(); // Bean으로 등록하여 재사용하기
+    String contentType = tika.detect(file);
+
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachement; filename=\"" + resource.getFilename() + "\"")
+        .header(HttpHeaders.CONTENT_TYPE, contentType)
+        .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(file.length()))
+        .body(resource);
+}
+```
+
+### 핸들러 메소드 15부: @RequestBody & HttpEntity
+* @RequestBody
+    * 요청 본문(body)에 들어있는 데이터를 HttpMessageConveter를 통해 변환한 객체로 받아올 수 있다.
+    * @Valid 또는 @Validated를 사용해서 값을 검증 할 수 있다.
+    * BindingResult 아규먼트를 사용해 코드로 바인딩 또는 검증 에러를 확인할 수 있다.
+* HttpMessageConverter
+    * 스프링 MVC 설정 (WebMvcConfigurer)에서 설정할 수 있다.
+    * configureMessageConverters: 기본 메시지 컨버터 대체
+    * extendMessageConverters: 메시지 컨버터에 추가
+    * 기본 컨버터
+        * WebMvcConfigurationSupport.addDefaultHttpMessageConverters
+* HttpEntity
+    * @RequestBody와 비슷하지만 추가적으로 요청 헤더 정보를 사용할 수 있다.
+
+### 핸들러 메소드 16부: @ResponseBody & ResponseEntity
+* @ResponseBody
+    * 데이터를 HttpMessageConverter를 사용해 응답 본문 메시지로 보낼 때 사용한다.
+    * @RestController 사용시 자동으로 모든 핸들러 메소드에 적용 된다.
+* ResponseEntity
+    *  응답 헤더 상태 코드 본문을 직접 다루고 싶은 경우에 사용한다.
+    
+### 핸들러 메소드 17부: 정리
+* 다루지 못한 내용
+    * @JsonView: https://www.youtube.com/watch?v=5QyXswB_Usg&t=188s
+    * PushBuidler: HTTP/2, 스프링 5
+* 과제
+    * 프로젝트 코드 분석
+    * https://github.com/spring-projects/spring-petclinic
+    * 컨트롤러 코드 위주로...
