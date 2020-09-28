@@ -1279,3 +1279,145 @@ public ResponseEntity<Resource> downloadFile(@PathVariable String filename) thro
     * 프로젝트 코드 분석
     * https://github.com/spring-projects/spring-petclinic
     * 컨트롤러 코드 위주로...
+
+### 모델 @ModelAttribute
+* @ModelAttibute의 다른 용법
+    * @RequestMapping을 사용한 핸들러 메소드의 아규먼트에 사용하기(이미 위에서 함)
+    * @Controller / @ControllerAdvice를 사용한 클래스에서 모델 정보를 초기화 할 때 사용
+      * code
+      ```java
+      @Controller
+      public class EventController {
+         // handler method가 호출되지 않아도 model에 데이터를 넣어줄 수 있다 (각 handler method에 중복된 코드를 제거 가능)
+         @ModelAttribute
+         public void subjects(Model model) {
+            model.addAttribute("subjects", List.of("study", "seminar", "hobby", "social"));
+         }
+      }
+      ```
+* @RequestMapping과 같이 사용하면 해당 메소드에서 리턴하는 객체를 모델에 넣어줌
+ 
+### 데이터 바인더 @InitBinder
+* 데이터 바인더 : PathVariable, RequestParam, RequestBody 등에 있는 데이터를 객체에 바인딩 해줌
+* 특정 컨트롤러에서 바인딩 또는 검증 설정을 변경하고 싶을 때 사용
+* 바인딩 설정
+    * webDataBinder.setDisallowedFields(); // 바인딩 하지 않을 필드를 지정(blacklist방식)
+    * webDataBinder.setAllowedFields(); // 바인딩 할 필드만 지정(whitelist방식)
+* 포매터 설정
+    * webDataBinder.addCustomFormatter();
+    * 참고) LocalDate 포매팅 지정하기
+   ```java
+   public class Event {
+      ...
+      @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) // or use string like "yyyy-mm-dd" 
+      private LocalDate startDate;
+      ...
+   }
+   ```
+* Validator 설정
+    * webDataBinder.addValidators();
+    * code (스프링 부트 핵심기술 복습)
+   ```java
+   // custom validator
+   public class EventValidator implements Validator {
+      @Override
+      public bollean supports(Class<?> clazz) {
+         return Event.class.isAssignableFrom(clazz); // check that input class can be used for validating
+      }
+      @Override
+      public void validate(Object target, Errors errors) {
+         Event event = (Event) target;
+         if (event.getName().equalsIgnoreCase("asdf")) {
+            errors.rejectValue("name", "wrongValue", "the vaule is not allowed");
+         }
+      }
+   }
+   // set Validator
+   @Controller
+   public class EventController {
+      @InitBinder
+      public void initEventBinder(WebDataBinder webDataBinder) {
+         webDatBinder.addValidators(new EvnetValidator());
+      }
+      ...
+   }
+   ```
+* 특정 모델 객체에만 바인딩 또는 Validator 설정을 적용하고 싶은 경우
+    * @InitBinder("event")
+* code
+```java
+@Controller
+public class EventController {
+   // This method is called before calling each handler methods under this controller
+   @InitBinder
+   public void initEventBinder(WebDataBinder webDataBinder) { // return type should be void
+
+   }
+}
+```
+ 
+### 예외 처리 핸들러 @ExceptionHandler
+* 특정 예외가 발생한 요청을 처리하는 핸들러 정의
+    * 지원하는 method argument (해당 예외 객체, 핸들러 객체, ...)
+    * 지원하는 리턴 값
+    * REST API의 경우 응답 본문에 에러에 대한 정보를 담아주고, 상태 코드를 설정하려면 ResponseEntity를 주로 사용
+    * https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-exceptionhandler
+* code
+```java
+// custom handler
+public class EventException extends RuntimeException {}
+// controller
+@Controller
+public class EventController {
+   @ExceptionHandler
+   public String eventErrorHandler(EventException exception, Model model) {
+      model.addAttribute("message", "event error");
+      return "error";
+   }
+   // or
+   @ExceptionHandler
+   public ResponseEntity errorHandler() {
+      return ResponseEntity.badRequest().body("can't create event as .."); // reference suggestion, this can show status code and error message
+   }
+}
+// error page
+...
+<div th:if="${message}">
+   <h2 th:text="${message}"/>
+</div>
+...
+```
+### 전역 컨트롤러 @ControllerAdvice
+* 예외 처리, 바인딩 설정, 모델 객체를 모든 컨트롤러 전반에 걸쳐 사용하고 싶은 경우 사용
+    * @ExceptionHandler
+    * @InitBinder
+    * @ModelAttributes
+* 적용할 범위도 지정 가능
+    * 특정 annotation을 가지고 있는 컨트롤러에만 적용
+    * 특정 패키지 이하의 컨트롤러에만 적용
+    * 특정 클래스 타입에만 적용
+* https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-exceptionhandler
+* code
+```java
+@ControllerAdvice
+// or @ControllerAdvice(assignableTypes = {EventController.class, EventApi.class})
+// or @ControllerAdvice("org.example.controllers")
+// or @RestControllerAdvice
+public class BaseController {
+   @ExceptionHandler
+   ...
+   @InitBinder
+   ...
+   @ModelAttribute
+   ...
+}
+```
+ 
+### Spring MVC 강좌 마무리
+* 살펴보지 못한 내용
+    * 비동기 요청 처리
+    * CORS tjfwjd
+    * HTTP/2
+    * web socket
+    * webflux
+    * ...
