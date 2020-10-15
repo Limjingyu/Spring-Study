@@ -462,6 +462,7 @@ public ResponseEntity createEvent(@RequestBody @Valid EventDto eventDto, Binding
     return ResponseEntity.created(createdUri).body(eventEntityModel);
 }
 ``` 
+
 * 테스트 할 것
     * 응답에 HATEOA와 profile 관련 링크가 있는지 확인.
         * self (view)
@@ -491,3 +492,351 @@ https://docs.spring.io/spring-restdocs/docs/2.0.2.RELEASE/reference/html5/
         * ...
 * Constraint
     * https://github.com/spring-projects/spring-restdocs/blob/v2.0.2.RELEASE/samples/rest-notes-spring-hateoas/src/test/java/com/example/notes/ApiDocumentation.java
+
+### 스프링 REST Docs 적용
+* REST Docs 자동 설정
+    * @AutoConfigureRestDocs
+    * code
+```java
+// 테스트를 수행한 이후에 target/generated-snippets/document-name/ 하위에 실행한 rest api의 문서를 만들어 준다
+@RunWith(...)
+@AutoConfigureRestDocs
+public class SomeTest {
+   @Test
+   public void test() {
+      mockMvc.perform(...)
+         .andDo(document("document-name");
+   }
+}
+```
+* RestDocMockMvc 커스터마이징
+    * RestDocsMockMvcConfigurationCustomizer 구현한 빈 등록 (snippet으로 나온 결과물의 json이 포매팅이 안되고 json string이므로 이걸 포매팅 하기 위해 사용)
+    * @TestConfiguration
+    * code
+```java
+// create configuration
+@TestConfiguration
+public class RestDocsConfiguration {
+    @Bean
+    public RestDocsMockMvcConfigurationCustomizer restDocsMockMvcConfigurationCustomizer() {
+        return configurer -> configurer.operationPreprocessors()
+                .withRequestDefaults(prettyPrint())
+                .withResponseDefaults(prettyPrint());
+    }
+}
+// test
+@RunWith(...)
+@AutoConfigureRestDocs
+@Import(RestDocsConfiguration.class) // apply customizing rest docs configuration
+public class SomeTest { ... }
+```
+ 
+* 테스트 할 것
+    * API 문서 만들기
+        * 요청 문서화
+        * 응답 문서화
+        * 링크 문서화
+        * profile 링크 추가
+ 
+### 스프링 REST Docs 각종 문서 조각 생성하기
+* 요청 필드 문서화, 요청/응답의 필드들에 대한 설명 추가
+    * requestFields() + filedWithPath()
+    * responseFields() + fieldWithPath()
+    * requestHeaders() + headerWithName()
+    * responseHeaders() + headerWithName()
+    * links() + linkWhtRel()
+    * relaxedResponseFields() // 인자에 정의된 필드에 대해서만 검사하고 추가로 들어오는 필드는 검증에서 무시, links가 response body에 들어오게 되어서 responseFields()를 사용하면 에러 발생
+* 테스트 할 것
+    * API 문서 만들기
+        * 링크 문서화
+            * self
+            * query-events
+            * update-event
+            * profile 링크 추가
+        * 요청 헤더 문서화
+        * 요청 필드 문서화
+        * 응답 헤더 문서화
+        * 응답 필드 문서화
+ 
+### 스프링 REST Docs 문서 빌드
+* 스프링 REST Docs
+    * pom.xml / build.gradle에 asciidoctor plugin 추가
+    * main/asciidoc/index.adoc 추가 : https://gitlab.com/whiteship/natural/-/blob/master/src/main/asciidoc/index.adoc
+    * mvn package
+        * test 실행 후 packaging
+        * test 실행 중 문서 조각들이 생성됨
+        * asciidoctor plugin이 spring boot가 지원하는 static directory에 문서 페이지를 두어 view에서 볼 수 있게 해준다 (target/generated-docs/index.html이 생성됨)
+    * gradle에서 사용하기
+        * plugin documents :https://asciidoctor.github.io/asciidoctor-gradle-plugin/development-3.x/user-guide/
+        * 설정 방법
+   ```groovy
+   // build.gradle
+   plugins { id 'org.asciidoctor.jv.convert' version '3.1.0' }
+   asciidoctor {
+      sourceDir file('src/main/asciidoc') // 기본 directory 위치는 src/docs/asciidoc이고, 강의에서는 src/main/asciidoc/index.adoc을 두기 때문에 수정, reference : https://asciidoctor.github.io/asciidoctor-gradle-plugin/development-3.x/user-guide/#_task_configuration
+   }
+   ```
+* document 생성
+    * ./gradlew asciidoctor
+* 테스트
+    * profile 링크 추가
+    * code
+   ```java
+   //EventController
+   @PostMapping
+   public ResponseEntity createEvent(...) {
+      ...
+      eventResource.add(new Link("/docs/index.html#resources-events-create).withRel("profile"));
+      ...
+   }
+   //EventControllerTest
+   @Test
+   public void createEvent() {
+      ...
+      document(
+         links(
+            ...
+            linkWithRel("profile").description("Link to profile");
+         ),
+         ...
+         responseFields(
+            ...
+            filedWithPath("_links.profile.href").description("Link to profile");
+         )
+   }
+   ```
+### 테스트용 DB와 설정 분리하기
+* 테스트 할 때 계속 H2를 사용해도 좋지만, 애플리케이션 서버를 실행할 때 PostgreSQL을 사용하도록 변경하자
+* /scripts.md 참고 (https://gitlab.com/whiteship/natural/-/blob/master/scripts.md)
+    * PostgreSQL 드라이버 의존성 추가
+        * groupId: org.postgresql, name: postgresql
+    * Docker로 PostgreSQL 컨테이너 실행
+        * docker run --name ndb -p 5432:5432 -e POSTGRES_PASSWORD=pass -d postgres
+    * Docker container 접속
+   ```bash
+   docker exec -ti ndb bash
+   su - postgres
+   psql -d postgres -U postgres
+   \l
+   \dt
+   ```
+* datasource 설정
+```
+# application.properties
+spring.datasource.username=postgres
+spring.datasource.password=pass
+spring.datasource.url=jdbc:postgresql://localhost:5432/postgres
+spring.datasource.driver-class-name=org.postgresql.Driver
+```
+* hibernate 설정
+```
+spring.jpa.hibernate.ddl-auto=create-drop
+spring.jpa.properties.hibernate.jdbc.lob.non_contextual_creation=true
+spring.jpa.properteis.hibernate.format_sql=true
+loging.level.org.hibernate.SQL=DEBUG
+loging.level.org.hibernate.type.descriptor.sql.BasicBinder=TRACE
+```
+* 애플리케이션 설정과 테스트 설정 중복은 어떻게 줄일 것인가?
+    * test code에서 @ActiveProfile("test") 이용
+    * test/java/resourcees/application-test.properties 생성
+```
+#application-test.properties
+spring.datasource.username=sa
+spring.datasource.password=
+spring.datasource.url=jdbc:h2:mem:testdb
+spring.datasource.driver-class-name=org.h2.Driver
+spring.datasource.hikari.jdbc-url=jdbc:h2:mem:testdb
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect
+```
+
+### API 인덱스 만들기
+* 인덱스 만들기
+    * 다른 리소스에 대한 링크 제공
+    * 문서화
+* code
+```java
+// IndexController.java
+@GetMapping("/api")
+public ResourceSupport root() {
+   ResourceSupport index = new ResourceSupport();
+   index.add(linkTo(EventController.class).withRel("events"));
+   return index;
+}
+// ErrorsResource.java, To add link of index page when handling Errors
+public class ErrorsResource extends EntityModel<Errors> {
+    public ErrorsResource(Errors content, Link... links) {
+        super(content, links);
+        add(linkTo(methodOn(IndexController.class).index()).withRel("index"));
+    }
+}
+// ErrorControllor.java
+... // in createEvent method
+if (errors.hasErros()) {
+   return badRequest(errors);
+}
+private ResponseEntity badRequest(Errors errors) {
+    return ResponseEntity.badRequest().body(new ErrorsResource(errors));
+}
+// EventControllerTest.java
+... // in badRequest test
+mockMvc.perform(post(...))
+   ...
+.andExpect(jsonPath("_links.index").exist()
+```
+## 이벤트 조회 및 수정 REST API 개발
+
+### 이벤트 목록 조회 API 구현
+* 페이징, 정렬 어떻게 하지?
+    * 스프링 데이터 JPA가 제공하는 Pageable
+* page link 추가, Page<Event>에 안에 들어있는 Event들을 각각의 리소스로 변환
+    * PagedResourceAssembler<T> 사용하기
+    * PagedResourceAssembler를 이용하여 PagedModel을 생성하면 page에 관련된 links(현재 페이징의 앞/뒤 링크)를 생성해 준다
+    * assembler.toModel() 의 두 번째 인자에 람다식으로 각 Event를 변환해 줄 수 있는데 이 기능으로 Event -> EventResource로 변환하여 links를 추가한다
+    * code
+   ```java
+   // in EventController
+   @GetMapping
+   public ResponseEntity queryEvents(Pageable pageable, PagedResourcesAssembler<Event> assembler) {
+       Page<Event> page = eventRepository.findAll(pageable);
+       PagedModel<EntityModel<Event>> pagedResources = assembler.toModel(page, e -> new EventResource(e)
+   );
+
+       return ResponseEntity.ok(pagedResources);
+   }
+   ```
+ 
+* 테스트 할 때 Pageable parameter 제공하는 방법
+    * page: 0부터 시작
+    * size: default 20
+    * sort: property, peoperty(,ASC|DESC)
+ 
+* 테스트 할 것
+    * Event 목록 Page 정보와 함께 받기
+        * content[0].id 확인
+        * pageable 경로 확인
+    * Sort와 Paging 확인
+        * 30개를 만들고 10개 사이즈로 두 번쨰 페이지를 조회하면 이전/다음 페이지로 가는 링크 필요
+        * 이벤트 이름 순 정렬
+        * page 관련 링크
+    * Event를 EventResource로 변환해서 받기
+        * 각 이벤트 마다 self
+    * 링크 확인
+        * self
+        * profile
+        * (create)
+    * 문서화
+ 
+### 이벤트 조회 API 구현
+* 테스트 할 것
+    * 조회하는 이벤트가 있는 경우 이벤트 리소스 확인
+        * 링크
+            * Self
+            * Profile
+            * (update)
+        * 이벤트 데이터
+    * 조회하는 이벤트가 없는 경우 404 응답 확인
+ 
+### 이벤트 수정 API 구현
+* 테스트 할 것
+    * 수정하려는 이벤트가 없는 경우 404 NOT_FOUND
+    * 입력 데이터(데이터 바인딩)가 이상한 경우에 400 BAD_REQUEST
+    * 도메인 로직으로 데이터 검증 실패하면 400 BAD_REQUEST
+    * (권한이 충분하지 않은 경우에 403 FORBIDDEN)
+    * 정상적으로 수정한 경우에 이벤트 리소스 응답
+        * 200 OK
+        * 링크
+        * 수정한 이벤트 데이터
+ 
+### 테스트 코드 리팩토링
+* 여러 컨트롤러 간의 중복 코드 제거하기
+    * 클래스 상속을 이용하는 방법
+    * @Ignore annotation으로 테스트로 간주되지 않도록 설정
+    * BaseControllerTest에 공통으로 사용할 annotation, fields를 정의하고 이걸 상속하여 다른 테스트에 사용. BaseControllerTest는 test가 아니므로 @Ignore annotation을 붙여준다
+
+## REST API 보안 적용
+### Account 도메인 추가
+* OAuth2로 인증하려면 일단 Account부터
+    * Id
+    * Email
+    * Password
+    * Roles
+* AccountRoles
+    * ADMIN, USER
+* JPA mapping
+    * @Table
+* JPA enumeration collection mapping
+    * @ElementCollection(fech = FetchType.EAGER)
+    * @Enumerated(EnumType.STRING)
+    * Private Set<AccountRole> roles;
+* Event에 owner 추가
+    * @ManyToOne
+    * Account manager 
+ 
+### 스프링 시큐리티 적용
+* 스프링 시큐리티
+    * 웹 시큐리티 (Filter 기반 시큐리티)
+    * 메소드 시큐리티
+    * 이 둘 다 Security Interceptor를 사용
+        * 리소스에 접근을 허용할 것이냐 말것이냐를 결정하는 로직이 들어있음
+
+* SecurityContextHolder가 인증 정보를 가지고 있고 꺼내 쓸 수 있다
+* 인증 정보가 없다면 AuthentificationManger를 이용하여 로그인을 해야한다
+    * 예를 들어 basic auth라면 사용자가 입력한 username, password를 인코딩한 값을 헤더에 넣어서 전달해주는데, UserDetailsService에서 username에 매칭되는 password를 db 등에서 가져와서 PasswordEncoder로 검사를 해서 매칭이 되면 로그인이 되는 것이고, 이를 SecurityContextHolder에 저장한다
+* 로그인이 되어있다면 사용자의 권한을 AccessDecisionManager로 확인한다. 확인은 Role을 이용한다
+* 의존성 추가
+    * group:'org.springframework.security.oauth.boot', name:'spring-security-oauth2-autoconfigure'
+    * 테스트가 다 깨지게 된다. 401 Unauthorized에 의해
+* UserDetailsService 구현
+    * 예외 테스트하기
+        * expected
+        * @Rule ExpectException
+        * try-catch
+    * asserThat(collection).extracting(GrantedAuthority::getAuth
+    * code
+   ```java
+   // AccountService
+   @Service
+   public class AccountService implements UserDetailsService {
+
+       @Autowired
+       AccountRepository accountRepository;
+
+       @Override
+       public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+           Account account = accountRepository.findByEmail(username)
+                   .orElseThrow(() -> new UsernameNotFoundException(username));
+           return new User(account.getEmail(), account.getPassword(), authorities(account.getRoles()));
+       }
+
+       private Collection<? extends GrantedAuthority> authorities(Set<AccountRole> roles) {
+           return roles.stream()
+                   .map(r -> new SimpleGrantedAuthority("ROLE_" + r.name()))
+                   .collect(Collectors.toSet());
+       }
+   }
+   ```
+ 
+### 예외 테스트
+* @Test(SomeExpectedException.class)
+    * 예외 타입만 확인 가능
+* try-catch
+    * 예외 타입과 메시지 확인 가능
+    * 다만 코드가 복잡해짐
+* @Rule ExpectedException
+    * 코드는 간결하면서 예외 타입과 메시지 모두 확인 가능
+* code
+```java
+	@Rule
+	public ExpectedException expectedException = ExpectedException.none();
+	…
+	@Test
+	public void findByUsernameFail() {
+	    // Expected
+	    String username = "random@email.com";
+	    expectedException.expect(UsernameNotFoundException.class);
+	    expectedException.expectMessage(Matchers.containsString(username));
+	
+	    // When
+	    accountService.loadUserByUsername(username);
+}
+```
