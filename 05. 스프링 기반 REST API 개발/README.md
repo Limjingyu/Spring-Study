@@ -840,3 +840,504 @@ mockMvc.perform(post(...))
 	    accountService.loadUserByUsername(username);
 }
 ```
+
+### 스프링 시큐리티 기본 설정
+* 시큐리티 필터를 적용하기 않음...
+    * /docs/index.html
+* 로그인 없이 접근 가능
+    * GET /api/events
+    * GET /api/events/{id}
+* 로그인 해야 접근 가능
+    * 나머지 다...
+    * POST /api/events
+    * PUT /api/events/{id{
+    * ...
+* 스프링 시큐리티 OAuth 2.0
+    * AuthorizationServer: OAuth2 토큰 발행(/oauth/token) 및 토큰 인증(/oauth/authorize)
+        * Oder 0 (리소스 서버 보다 우선 순위가 높다.)
+    * ResourceServer: 리소스 요청 인증 처리 (OAuth 2 토큰 검사)
+        * Oder 3 (이 값은 현재 고칠 수 없음)
+* 스프링 시큐리티 설정
+    * @EnableWebSecurity
+    * @EnableGlobalMethodSecurity
+    * extends WebSecurityConfigurerAdapter
+    * PasswordEncoder: PasswordEncoderFactories.createDelegatingPassworkEncoder()
+    * TokenStore: InMemoryTokenStore
+    * AuthenticationManagerBean
+    * configure(AuthenticationManagerBuidler auth)
+        * userDetailsService
+        * passwordEncoder
+    * configure(HttpSecurity http)
+        * /docs/**: permitAll
+    * configure(WebSecurty web)
+        * ignore 
+            * /docs/**
+            * /favicon.ico
+    * PathRequest.toStaticResources() 사용하기
+```java
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+    @Autowired
+    AccountService accountService;
+
+    @Autowired
+    PasswordEncoder passwordEncoder;
+
+    @Bean
+    public TokenStore tokenStore() {
+        return new InMemoryTokenStore();
+    }
+
+    @Bean
+    @Override
+    public AuthenticationManager authenticationManagerBean() throws Exception {
+        return super.authenticationManagerBean();
+    }
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.userDetailsService(accountService)
+                .passwordEncoder(passwordEncoder);
+    }
+
+    @Override
+    public void configure(WebSecurity web) throws Exception {
+        web.ignoring().mvcMatchers("/docs/index.html");
+        web.ignoring().requestMatchers(PathRequest.toStaticResources().atCommonLocations());
+    }
+}
+```
+### 스프링 시큐리티 폼 인증 설정
+```java
+// config
+@Override
+protected void configure(HttpSecurity http) throws Exception {
+    http
+            .anonymous()
+                .and()
+            .formLogin()
+                .and()
+            .authorizeRequests()
+                .mvcMatchers(HttpMethod.GET, "/api/**").anonymous()
+                .anyRequest().authenticated()
+            ;
+}
+
+//AccountService
+@Service
+public class AccountService implements UserDetailsService {
+
+    @Autowired
+    AccountRepository accountRepository;
+
+    @Autowired
+    PasswordEncoder passwordEncoder;
+
+    public Account saveAccount(Account account) {
+        account.setPassword(this.passwordEncoder.encode(account.getPassword()));
+        return this.accountRepository.save(account);
+    }
+    ...
+}
+
+// + test수정, ApplicationRunner로 유저추가
+```
+
+* 익명 사용자 사용 활성화
+* 폼 인증 방식 활성화
+    * 스프링 시큐리티가 기본 로그인 페이지 제공
+* 요청에 인증 적용
+    * /api 이하 모든 GET 요청에 인증이 필요함. (permitAll()을 사용하여 인증이 필요없이 익명으로 접근이 가능케 할 수 있음)
+    * 그밖에 모은 요청도 인증이 필요함.
+
+### 스프링 시큐리티 OAuth 2 설정: 인증 서버 설정
+```xml
+<dependency>
+    <groupId>org.springframework.security</groupId>
+    <artifactId>spring-security-test</artifactId>
+    <version>${spring-security.version}</version>
+    <scope>test</scope>
+</dependency>
+```
+* 토큰 발행 테스트
+    * User
+    * Client
+    * POST /oauth/token
+        * HTTP Basic 인증 헤더 (클라이언트 아이디 + 클라이언트 시크릿)
+        * 요청 매개변수 (MultiValuMap<String, String>)
+            * grant_type: password
+            * username
+            * password
+        * 응답에 access_token 나오는지 확인
+* Grant Type: Password
+    * Granty Type: 토큰 받아오는 방법
+    * 서비스 오너가 만든 클라이언트에서 사용하는 Grant Type
+    * https://developer.okta.com/blog/2018/06/29/what-is-the-oauth2-password-grant
+* AuthorizationServer 설정
+    * @EnableAuthorizationServer
+    * extends AuthorizationServerConfigurerAdapter
+    * configure(AuthorizationServerSecurityConfigurer security)
+        * PassswordEncode 설정
+    * configure(ClientDetailsServiceConfigurer clients)
+        * 클라이언트 설정
+        * grantTypes
+            * password
+            * refresh_token
+        * scopes
+        * secret / name
+        * accessTokenValiditySeconds
+        * refreshTokenValiditySeconds
+    * AuthorizationServerEndpointsConfigurer
+        * tokenStore
+        * authenticationMaanger
+        * userDetailsService
+ ```java
+@Configuration
+@EnableAuthorizationServer
+public class AuthServerConfig extends AuthorizationServerConfigurerAdapter {
+
+    @Autowired
+    PasswordEncoder passwordEncoder;
+
+    @Autowired
+    AuthenticationManager authenticationManager;
+
+    @Autowired
+    AccountService accountService;
+
+    @Autowired
+    TokenStore tokenStore;
+    @Override
+    public void configure(AuthorizationServerSecurityConfigurer security) throws Exception {
+        security.passwordEncoder(passwordEncoder);
+    }
+
+    @Override
+    public void configure(ClientDetailsServiceConfigurer clients) throws Exception {
+        clients.inMemory()
+                .withClient("myApp")
+                .authorizedGrantTypes("password", "refresh_token")
+                .scopes("read", "write")
+                .secret(this.passwordEncoder.encode("pass"))
+                .accessTokenValiditySeconds(10 * 60)
+                .refreshTokenValiditySeconds(6 * 10 * 60)
+                ;
+    }
+
+    @Override
+    public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
+        endpoints.authenticationManager(authenticationManager)
+            .userDetailsService(accountService)
+            .tokenStore(tokenStore)
+        ;
+    }
+}
+
+//Test
+public class AuthServerConfigTest extends BaseControllerTest {
+
+    @Autowired
+    AccountService accountService;
+
+    @Test
+    @TestDescription("인증 토큰을 발급 받는 테스트")
+    public void getAuthToken() throws Exception {
+        String username = "jingyu.im@nhnpayco.com";
+        String password = "920307";
+        Account account = Account.builder()
+                .email(username)
+                .password(password)
+                .roles(Set.of(AccountRole.ADMIN, AccountRole.USER))
+                .build();
+        this.accountService.saveAccount(account);
+
+        String clientId = "myApp";
+        String clientSecret = "pass";
+
+        this.mockMvc.perform(post("/oauth/token")
+                    .with(httpBasic(clientId, clientSecret))
+                    .param("username", username)
+                    .params("password", password)
+                    .param("grant_type", "password")
+        )
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("access_token").exists());
+    }
+}
+```
+
+### 스프링 시큐리티 OAuth 2 설정: 리소스 서버 설정
+* 테스트 수정
+    * GET을 제외하고 모두 엑세스 토큰을 가지고 요청 하도록 테스트 수정
+* ResourceServer 설정
+    * @EnableResourceServer
+    * extends ResourceServerConfigurerAdapter
+    * configure(ResourceServerSecurityConfigurer resources)
+        * 리소스 ID
+    * configure(HttpSecurity http)
+        * anonymous
+        * GET /api/** : permit all
+        * POST /api/**: authenticated
+        * PUT /api/**: authenticated
+        * 에러 처리
+            * accessDeniedHandler(OAuth2AccessDeniedHandler())
+
+```java
+@Configuration
+@EnableResourceServer
+public class ResourceServerConfig extends ResourceServerConfigurerAdapter {
+
+    @Override
+    public void configure(ResourceServerSecurityConfigurer resources) throws Exception {
+        resources.resourceId("event");
+    }
+
+    @Override
+    public void configure(HttpSecurity http) throws Exception {
+        http
+                .anonymous()
+                    .and()
+                .authorizeRequests()
+                    .mvcMatchers(HttpMethod.GET, "/api/**")
+                        .anonymous()
+                    .anyRequest()
+                        .authenticated()
+                    .and()
+                .exceptionHandling()
+                    .accessDeniedHandler(new OAuth2AccessDeniedHandler())
+                ;
+    }
+}
+
+
+// TEST
+    @Before
+    public void setUp() {
+        this.eventRepository.deleteAll();
+        this.accountRepository.deleteAll();
+    }
+
+    private String getBearerToken() throws Exception {
+        return "Bearer " + getAccessToken();
+    }
+
+    private String getAccessToken() throws Exception {
+        String username = "jingyu.im@nhnpayco.com";
+        String password = "920307";
+        Account account = Account.builder()
+                .email(username)
+                .password(password)
+                .roles(Set.of(AccountRole.ADMIN, AccountRole.USER))
+                .build();
+        this.accountService.saveAccount(account);
+
+        String clientId = "myApp";
+        String clientSecret = "pass";
+
+        ResultActions perform = this.mockMvc.perform(post("/oauth/token")
+                    .with(httpBasic(clientId, clientSecret))
+                    .param("username", username)
+                    .params("password", password)
+                    .param("grant_type", "password")
+        );
+        String resultString = perform.andReturn().getResponse().getContentAsString();
+        Jackson2JsonParser jackson2JsonParser = new Jackson2JsonParser();
+        return jackson2JsonParser.parseMap(resultString).get("access_token").toString();
+    }
+
+// ex
+mockMvc.perform(post("/api/events")
+        .header(HttpHeaders.AUTHORIZATION, getBearerToken())
+        .contentType(MediaType.APPLICATION_JSON)
+        .accept(MediaTypes.HAL_JSON)
+        .content(objectMapper.writeValueAsString(eventDto)))
+    .andDo(print())
+
+```
+
+### 문자열을 외부 설정으로 빼내기
+* 기본 유저 만들기
+    * ApplicationRunner
+        * Admin
+        * User
+* 외부 설정으로 기본 유저와 클라이언트 정보 빼내기
+    * @ConfigurationProperties
+
+```java
+@Component
+@ConfigurationProperties(prefix = "my-app")
+@Getter @Setter
+public class AppProperties {
+    @NotEmpty
+    private String adminUsername;
+
+    @NotEmpty
+    private String adminPassword;
+
+    @NotEmpty
+    private String userUsername;
+
+    @NotEmpty
+    private String userPassword;
+
+    @NotEmpty
+    private String clientId;
+
+    @NotEmpty
+    private String clientSecret;
+}
+
+//properties
+my-app.admin-username=admin@email.com
+my-app.admin-password=admin
+my-app.user-username=user@email.com
+my-app.user-password=user
+my-app.client-id=myApp
+my-app.client-secret=pass
+```
+### 이벤트 API 점검
+* 토큰 발급 받기
+    * POST /oauth/token
+    * BASIC authentication 헤더
+        * client Id(myApp) + client secret(pass)
+    * 요청 본문 폼
+        * username: admin@email.com
+        * password: admin
+        * grant_type: password
+* 토큰 갱신하기
+    * POST /oauth/token
+    * BASIC authentication 헤더
+        * client Id(myApp) + client secret(pass)
+    * 요청 본문 폼
+        * token: 처음에 발급받았던 refersh 토큰
+        * grant_type: refresh_token
+* 이벤트 목록 조회 API
+    * 로그인 했을 때
+        * 이벤트 생성 링크 제공
+* 이벤트 조회
+    * 로그인 했을 때
+        * 이벤트 Manager인 경우에는 이벤트 수정 링크 제공 
+
+### 스프링 시큐리티 현재 사용자
+* SecurityContext
+    * 자바 ThreadLocal 기반 구현으로 인증 정보를 담고 있다.
+    * 인증 정보 꺼내는 방법: Authentication authentication =
+* SecurityContextHolder.getContext().getAuthentication();
+* @AuthenticationPrincipal spring.security.User user
+    * 인증 안한 경우에 null
+    * 인증 한 경우에는 username과 authorities 참조 가능
+* spring.security.User를 상속받는 클래스를 구현하면
+    * 도메인 User를 받을 수 있다.
+    * @AuthenticationPrincipa me.whiteship.user.UserAdapter
+    * Adatepr.getUser().getId()
+* SpEL을 사용하면
+    * @AuthenticationPrincipa(expression=”account”) me.whiteship.user.Account
+* 커스텀 애노테이션을 만들면
+    * @CurrentUser Account account
+    ```java
+    @Target(ElementType.PARAMETER)
+    @Retention(RetentionPolicy.RUNTIME)
+    @AuthenticationPrincipal(expression = "account")
+    public @interface CurrentUser { } 
+    ```
+
+    ```java
+    //Controller
+    @GetMapping
+    public ResponseEntity queryEvents(Pageable pageable, PagedResourcesAssembler<Event> assembler,
+                                      @CurrentUser Account account) {
+    //        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    //        User principal = (User)authentication.getPrincipal();
+    
+        Page<Event> page = this.eventRepository.findAll(pageable);
+        var pageEntityModel = assembler.toModel(page);
+    //        var pageEntityModel = assembler.toModel(page, e -> new EventEntityModel(e)); // TODO _links.self ...
+        pageEntityModel.add(new Link("/docs/index.html#resources-events-list").withRel("profile"));
+        if(account != null) {
+            pageEntityModel.add(linkTo(EventController.class).withRel("create-event"));
+        }
+        return ResponseEntity.ok(pageEntityModel);
+    }
+    
+    //AccountAdapter
+    public class AccountAdapter extends User {
+    
+        private Account account;
+    
+        public AccountAdapter(Account account) {
+            super(account.getEmail(), account.getPassword(), authorities(account.getRoles()));
+            this.account = account;
+        }
+    
+        private static Collection<? extends GrantedAuthority> authorities(Set<AccountRole> roles) {
+            return roles.stream()
+                    .map(r -> new SimpleGrantedAuthority("ROLE_" + r.name()))
+                    .collect(Collectors.toSet());
+        }
+    
+        public Account getAccount() {
+            return account;
+        }
+    }
+    
+    // AccountService
+    
+    ```
+
+* 엇? 근데 인증 안하고 접근하면..?
+    * expression = "#this == 'anonymousUser' ? null : account"
+    * 현재 인증 정보가 anonymousUse 인 경우에는 null을 보내고 아니면 “account”를 꺼내준다.
+* 조회 API 개선
+    * 현재 조회하는 사용자가 owner인 경우에 update 링크 추가 (HATEOAS)
+* 수정 API 개선 현재 사용자가 이벤트 owner가 아닌 경우에 403 에러 발생
+
+### Events API 개선: 출력값 제한하기
+* 생성 API 개선
+    * Event owner 설정
+    * 응답에서 owner의 id만 보내 줄 것.
+    ```json
+    {
+        "id" : 4, 
+        "name" : "test 3PISM1Ju", 
+        "description" : "test event", 
+        ... 
+        "free" : false,
+        "eventStatus" : "DRAFT", 
+        "owner" : { "id" : 3, "email" : "keesun@email.com", "password" : "{bcrypt}$2a$10$3z/rHmeYsKpoOQR3aUq38OmZjZNsrGfRZxSnmpLfL3lpLxjD5/JZ6", "roles" : [ "USER", "ADMIN" ]  }, 
+    }
+    ```
+    * JsonSerializer<User> 구현
+    * @JsonSerialize(using) 설정
+```java
+//AccountSerializer
+public class AccountSerializer extends JsonSerializer<Account> {
+    @Override
+    public void serialize(Account account, JsonGenerator jsonGenerator, SerializerProvider serializerProvider) throws IOException {
+        jsonGenerator.writeStartObject();
+        jsonGenerator.writeNumberField("id", account.getId());
+        jsonGenerator.writeEndObject();
+    }
+}
+
+// Event
+@ManyToOne
+@JsonSerialize(using = AccountSerializer.class)
+private Account manager;
+```
+
+## 보강
+### 깨진 테스트 살펴보기
+* EventControllerTests.updateEvent()
+    * 깨지는 이유: NullPointerException
+    * 해결 방법: 코드 수정
+* EventControllerTests.getEvent()
+    * 깨지는 이유: NullPointerException
+    * 해결 방법: 코드 수정
+* DemoApplicationTests
+    * 깨지는 이유: 테스트에서 H2가 아닌 PostgreSQL 사용하려 하지만, PostgreSQL이 동작중이지 않음.
+    * 해결 방법: 해당 테스트에서 H2를 사용하도록 test 프로파일 설정.
+
+### 스프링부트 업그레이드
