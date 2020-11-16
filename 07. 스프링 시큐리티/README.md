@@ -397,17 +397,19 @@ private Account createUser(String username, String password) {
     * 따라서 같은 thread라면 해당 데이터를 메소드 매개변수로 넘겨줄 필요 없다
     * SecurityContextHolder의 기본 전략
 * ThreadLocal sample code
+```java
 public class AccountContext { 
-private static final ThreadLocal<Account> ACCOUNT_THREAD_LOCAL = new ThreadLocal<>(); 
+   private static final ThreadLocal<Account> ACCOUNT_THREAD_LOCAL = new ThreadLocal<>(); 
  
-public static void setAccount(Account account) { 
-ACCOUNT_THREAD_LOCAL.set(account); 
-} 
+   public static void setAccount(Account account) { 
+      ACCOUNT_THREAD_LOCAL.set(account); 
+   } 
  
-public static Account getAccount() {
-return ACCOUNT_THREAD_LOCAL.get(); 
-}
+   public static Account getAccount() {
+      return ACCOUNT_THREAD_LOCAL.get(); 
+   }
 } 
+```
  
 ### Authentication과 SecurityContextHolder
 * AuthenticationManager가 인증을 마친 뒤 리턴받은 Authentication 객체의 행방은?
@@ -415,29 +417,33 @@ return ACCOUNT_THREAD_LOCAL.get();
     * 폼 인증을 처리하는 시큐리티 필터
     * 인증된 Authentication 객체를 SecurityContextHolder에 넣어주는 필터
     * UsernamePasswordAuthenticationFilter.java
+```java
 Authentication attemptAuthentication(request, reponse) {
-…
-return this.getAuthenticationManager().authenticate(authRequest); // 인증 하는 부분. 위에서 말한 "인증은 AuthenticatinoManager가 한다"에 해당
+   …
+   return this.getAuthenticationManager().authenticate(authRequest); // 인증 하는 부분. 위에서 말한 "인증은 AuthenticatinoManager가 한다"에 해당
 }
 // AbstractAuthenticationProcessingFilter.java , super class of UsernamePasswordAuthenticationFilter
 doFilter() {
-…
-successfulAuthentication(request, response, chain, authResult);
+   …
+   successfulAuthentication(request, response, chain, authResult);
 }
 successfulAuthentication(request, response, chain, authResult) {
-…
-SecurityContextHolder.getContext().setAuthentication(authResult);
+   …
+   SecurityContextHolder.getContext().setAuthentication(authResult);
 }
+```
 * SecurityContextPersistenceFilter
     * SecurityContext를 HTTP session에 캐시(기본 전략)하여 여러 요청에서 Authentication을 공유하는 필터
     * SecurityContextRepository를 교체하여 세션을 HTTP session이 아닌 다른 곳에 저장하는 것도 가능
     * SecurityContextPersistenceFilter.java
+```java
 …
 SecurityContext contextBeforeChainExecution = repo.loadContext(holder); // HttpSession에서 인증 데이터를 꺼내서 HttpSessionSecurityContextRepository에서 저장된 인증 정보를 가져오는 시도를 함
 try {
-SecurityContextHolder.getContext().setAuthentication(authentication); // 로그인이 되기 전엔 NullAuthentication이고, 
-…
+   SecurityContextHolder.getContext().setAuthentication(authentication); // 로그인이 되기 전엔 NullAuthentication이고, 
+   …
 }
+```
  
 ### 스프링 시큐리티 필터와 FilterChainProxy
 * 스프링 시큐리티에서 필터를 관리하는 방법
@@ -510,6 +516,7 @@ SecurityContextHolder.getContext().setAuthentication(authentication); // 로그�
     * 해결
         * AccessDecisionManager를 커스터마이징
         * code
+```java
 // SecurityConfig.java
 public AccessDecisionManager accessDecisionManager() {
     RoleHierarchyImpl roleHierarchy = new RoleHierarchyImpl();
@@ -525,9 +532,9 @@ public AccessDecisionManager accessDecisionManager() {
     return new AffirmativeBased(voters);
 }
 protected void configure(HttpSecurity http) throws Exception {
-http.
-…
-.accessDecisionManager(accessDecisinoManager())
-…
+   http.
+   …
+   .accessDecisionManager(accessDecisinoManager())
+   …
 }
- 
+```
