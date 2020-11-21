@@ -538,3 +538,388 @@ protected void configure(HttpSecurity http) throws Exception {
    …
 }
 ```
+
+### FilterSecurityInterceptor
+AccessDecisionManager를 사용하여 Access Control 또는 예외 처리 하는 필터.
+대부분의 경우 FilterChainProxy에 제일 마지막 필터로 들어있다.
+* AbstractSecurityInterceptor 상속받아 구현
+![18](./img/18.PNG)
+
+### ExceptionTranslationFilter
+* 필터 체인에서 발생하는 AccessDeniedException과 AuthenticationException을 처리하는 필터
+* AuthenticationException 발생 시 (-> 이건 언제 발생??)
+    * AuthenticationEntryPoint(인증처리기) 실행
+    * AbstractSecurityInterceptor 하위 클래스(예, FilterSecurityInterceptor)에서 발생하는 예외만 처리.
+    * 그렇다면 UsernamePasswordAuthenticationFilter에서 발생한 인증 에러는? : 여기오지 않는다. 해당필터 안에서 처리. 
+* AccessDeniedException 발생 시
+    * 익명 사용자라면 AuthenticationEntryPoint 실행
+    * 익명 사용자가 아니면 AccessDeniedHandler에게 위임
+
+### 스프링 시큐리티 아키텍처 정리
+![20](./img/20.PNG)
+
+## 웹 애플리케이션 시큐리티
+### 스프링 시큐리티 ignoring() 1부
+* WebSecurity의 ignoring()을 사용해서 시큐리티 필터 적용을 제외할 요청을 설정할 수 있다.
+    * 스프링 부트가 제공하는 PathRequest를 사용해서 정적 자원 요청을 스프링 시큐리티 필터를 적용하지 않도록 설정.
+```java
+@Override
+public void configure(WebSecurity web) throws Exception {
+    web.ignoring().requestMatchers(PathRequest.toStaticResources().atCommonLocations());
+}
+```
+
+### 스프링 시큐리티 ignoring() 2부
+```java
+http.authorizeRequests().requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
+```
+* 이런 설정으로도 같은 결과를 볼 수는 있지만 스프링 시큐리티 필터가 적용된다는 차이가 있다.
+    * 동적 리소스는 http.authorizeRequests()에서 처리하는 것을 권장합니다.
+    * 정적 리소스는 WebSecurity.ignore()를 권장하며 예외적인 정적 자원 (인증이 필요한 정적자원이 있는 경우)는 http.authorizeRequests()를 사용할 수 있습니다
+
+### Async 웹 MVC를 지원하는 필터: WebAsyncManagerIntegrationFilter
+* 스프링 MVC의 Async 기능(핸들러에서 Callable을 리턴할 수 있는 기능)을 사용할 때에도 SecurityContext를 공유하도록 도와주는 필터.
+    * PreProcess: SecurityContext를 설정한다.
+    * Callable: 비록 다른 쓰레드지만 그 안에서는 동일한 SecurityContext를 참조할 수 있다.
+    * PostProcess: SecurityContext를 정리(clean up)한다.
+
+```java
+// Controller
+@GetMapping("async-handler")
+@ResponseBody
+public Callable<String> asyncHandler() {
+    SecurityLogger.log("MVC");
+
+    return () -> {
+        SecurityLogger.log("Callable");
+        return "Async Handler";
+    };
+}
+
+// Logger
+public class SecurityLogger {
+
+    public static void log(String message) {
+        System.out.println(message);
+        Thread thread = Thread.currentThread();
+        System.out.println("thread : " + thread.getName());
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        System.out.println("principal : " + principal);
+
+    }
+}
+
+//RESULT
+MVC
+thread : http-nio-8080-exec-1
+principal : org.springframework.security.core.userdetails.User@586034f: Username: admin; Password: [PROTECTED]; Enabled: true; AccountNonExpired: true; credentialsNonExpired: true; AccountNonLocked: true; Granted Authorities: ROLE_ADMIN
+Callable
+thread : task-3
+principal : org.springframework.security.core.userdetails.User@586034f: Username: admin; Password: [PROTECTED]; Enabled: true; AccountNonExpired: true; credentialsNonExpired: true; AccountNonLocked: true; Granted Authorities: ROLE_ADMIN
+
+```
+### 스프링 시큐리티와 @Async
+* @Async를 사용한 서비스를 호출하는 경우
+    * 쓰레드가 다르기 때문에 SecurityContext를 공유받지 못한다.
+    ```java
+    SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
+    ```
+    * SecurityContext를 자식 쓰레드에도 공유하는 전략.
+    * @Async를 처리하는 쓰레드에서도 SecurityContext를 공유받을 수 있다.
+
+```java
+// Controller
+@GetMapping("async-service")
+@ResponseBody
+public String asyncService() {
+    SecurityLogger.log("MVC before Service");
+    sampleService.asyncService();
+    SecurityLogger.log("MVC after Service");
+
+    return "Async Service";
+}
+
+// Service
+@Async
+public void asyncService() {
+    SecurityLogger.log("Async Service");
+    System.out.println("Async Service is called");
+}
+
+// DemoSpringSecurityApplication
+@SpringBootApplication
+@EnableAsync
+public class DemoSpringSecurityApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(DemoSpringSecurityApplication.class, args);
+    }
+}
+
+// RESULT
+MVC before Service
+thread : http-nio-8080-exec-5
+principal : org.springframework.security.core.userdetails.User@586034f: Username: admin; Password: [PROTECTED]; Enabled: true; AccountNonExpired: true; credentialsNonExpired: true; AccountNonLocked: true; Granted Authorities: ROLE_ADMIN
+MVC after Service
+thread : http-nio-8080-exec-5
+principal : org.springframework.security.core.userdetails.User@586034f: Username: admin; Password: [PROTECTED]; Enabled: true; AccountNonExpired: true; credentialsNonExpired: true; AccountNonLocked: true; Granted Authorities: ROLE_ADMIN
+Async Service
+thread : task-3
+principal : org.springframework.security.core.userdetails.User@586034f: Username: admin; Password: [PROTECTED]; Enabled: true; AccountNonExpired: true; credentialsNonExpired: true; AccountNonLocked: true; Granted Authorities: ROLE_ADMIN
+Async Service is called
+```
+
+### SecurityContext 영속화 필터: SecurityContextPersistenceFilter
+* SecurityContextRepository를 사용해서 기존의 SecurityContext를 읽어오거나 초기화 한다.
+    * 기본으로 사용하는 전략은 HTTP Session을 사용한다.
+    * Spring-Session과 연동하여 세션 클러스터를 구현할 수 있다. (이 강좌에서는 다루지 않습니다.)
+    
+![25](./img/25.PNG)
+
+### 시큐리티 관련 헤더 추가하는 필터: HeaderWriterFilter
+* 응답 헤더에 시큐리티 관련 헤더를 추가해주는 필터
+    * XContentTypeOptionsHeaderWriter: 마임 타입 스니핑 방어.
+    * XXssProtectionHeaderWriter: 브라우저에 내장된 XSS 필터 적용.
+    * CacheControlHeadersWriter: 캐시 히스토리 취약점 방어.
+    * HstsHeaderWriter: HTTPS로만 소통하도록 강제.
+    * XFrameOptionsHeaderWriter: clickjacking 방어.
+```
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+Content-Language: en-US
+Content-Type: text/html;charset=UTF-8
+Date: Sun, 04 Aug 2019 16:25:10 GMT
+Expires: 0
+Pragma: no-cache
+Transfer-Encoding: chunked
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+```
+![26](./img/26.PNG)
+
+* 참고
+    * X-Content-Type-Options:
+        * https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options
+    * Cache-Control:
+        * https://www.owasp.org/index.php/Testing_for_Browser_cache_weakness_(OTGAUTHN-006)
+    * X-XSS-Protection
+        * https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-XSS-Protection
+        * https://github.com/naver/lucy-xss-filter
+    * HSTS
+        * https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html
+    * X-Frame-Options
+        * https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options
+    * https://cyberx.tistory.com/171
+    
+### CSRF 어택 방지 필터: CsrfFilter
+* CSRF 어택 방지 필터
+    * 인증된 유저의 계정을 사용해 악의적인 변경 요청을 만들어 보내는 기법.
+    * https://www.owasp.org/index.php/Cross-Site_Request_Forgery_(CSRF)
+    * https://namu.wiki/w/CSRF
+    * CORS를 사용할 때 특히 주의 해야 함.
+        * 타 도메인에서 보내오는 요청을 허용하기 때문에...
+        * https://en.wikipedia.org/wiki/Cross-origin_resource_sharing
+    
+![27-1](./img/27-1.PNG)
+
+* 의도한 사용자만 리소스를 변경할 수 있도록 허용하는 필터
+    * CSRF 토큰을 사용하여 방지.
+    
+![27-2](./img/27-2.PNG)
+
+### CSRF 토큰 사용 예제
+* JSP에서 스프링 MVC가 제공하는 <form:form> 태그 또는 타임리프 2.1+ 버전을 사용할 때 폼에 CRSF 히든 필드가 기본으로 생성 됨.
+```html
+<!--Signup.html-->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>SignUp</title>
+</head>
+<body>
+    <h1>Sign Up</h1>
+    <form action="/signup" th:action="@{/signup}" th:object="${account}" method="post">
+    <p>Username: <input type="text" th:field="*{username}" /></p>
+    <p>Password: <input type="text" th:field="*{password}" /></p>
+    <p><input type="submit" value="Submit" /></p>
+    </form>
+</body>
+</html>
+```
+```java
+// SignUpController
+package me.whiteship.demospringsecurityform.account;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PostMapping;
+@Controller
+public class SignUpController {
+
+    @Autowired
+    AccountService accountService;
+
+    @GetMapping("/signup")
+    public String signUpForm(Model model) {
+        model.addAttribute("account", new Account());
+        return "signup";
+    }
+
+    @PostMapping("/signup")
+    public String processSignUp(@ModelAttribute Account account) {
+        account.setRole("USER");
+        accountService.createNew(account);
+        return "redirect:/";
+    }
+}
+
+// TEST
+@RunWith(SpringRunner.class)
+@SpringBootTest
+@AutoConfigureMockMvc
+public class SignUpControllerTest {
+
+    @Autowired
+    MockMvc mockMvc;
+
+    @Test
+    public void signUpForm() throws Exception {
+        mockMvc.perform(get("/signup"))
+            .andDo(print())
+            .andExpect(content().string(containsString("_csrf")));
+    }
+
+    @Test
+    public void procesSignUp() throws Exception {
+        mockMvc.perform(post("/signup")
+            .param("username", "keesun")
+            .param("password", "123")
+            .with(csrf()))
+                .andExpect(status().is3xxRedirection());
+    }
+}
+```
+
+### 로그아웃 처리 필터: LogoutFilter
+* 여러 LogoutHandler를 사용하여 로그아웃시 필요한 처리를 하며 이후에는 LogoutSuccessHandler를 사용하여 로그아웃 후처리를 한다.
+* LogoutHandler
+    * CsrfLogoutHandler
+    * SecurityContextLogoutHandler
+*LogoutSuccessHandler
+    * SimplUrlLogoutSuccessHandler
+* 로그아웃 필터 설정
+    ```java
+    http.logout()
+        .logoutUrl("/logout")
+        .logoutSuccessUrl("/")
+        .logoutRequestMatcher()
+        .invalidateHttpSession(true)
+        .deleteCookies()
+        .addLogoutHandler()
+        .logoutSuccessHandler();
+    ```
+![29](./img/29.PNG)
+
+### 폼 인증 처리 필터: UsernamePasswordAuthenticationFilter
+* 폼 로그인을 처리하는 인증 필터
+    * 사용자가 폼에 입력한 username과 password로 Authentcation을 만들고 AuthenticationManager를 사용하여 인증을 시도한다.
+    * AuthenticationManager (ProviderManager)는 여러 AuthenticationProvider를 사용하여 인증을 시도하는데, 그 중에 DaoAuthenticationProvider는 UserDetailsServivce를 사용하여 UserDetails 정보를 가져와 사용자가 입력한 password와 비교한다.
+    
+![30](./img/30.PNG)
+
+### DefaultLoginPageGeneratingFilter
+* 기본 로그인 폼 페이지를 생성해주는 필터
+   * GET /login 요청을 처리하는 필터.
+* 로그인 폼 커스터마이징
+```java
+http.formLogin()
+    .usernameParameter("my-username")
+    .passwordParameter("my-password");
+```
+![31](./img/31.PNG)
+
+### 로그인/로그아웃 폼 커스터마이징
+* https://docs.spring.io/spring-security/site/docs/current/reference/html5/#jc-form
+
+* Login.html
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>Login</title>
+</head>
+<body>
+    <h1>Log In</h1>
+    <div th:if="${param.error}">
+        <div class="alert alert-danger">
+            Invalid username or password.
+        </div>
+    </div>
+    <form action="/login" th:action="@{/login}" method="post">
+        <p>Username: <input type="text" name="username" /></p>
+        <p>Password: <input type="password" name="password" /></p>
+        <p><input type="submit" value="Login" /></p>
+    </form>
+</body>
+</html>
+```
+
+* Logout.html
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>SignIn</title>
+</head>
+<body>
+    <h1>Logout</h1>
+    <form action="/logout" th:action="@{/logout}" method="post">
+        <p><input type="submit" value="Logout" /></p>
+    </form>
+</body>
+</html>
+```
+
+* 시큐리티 설정
+```java
+http.formLogin()
+    .loginPage("/login")
+    .permitAll();
+```
+### Basic 인증 처리 필터: BasicAuthenticationFilter
+* Basic 인증이란?
+    * https://tools.ietf.org/html/rfc7617
+    * 요청 헤더에 username와 password를 실어 보내면 브라우저 또는 서버가 그 값을 읽어서 인증하는 방식. 
+        예) Authorization: Basic QWxhZGRpbjpPcGVuU2VzYW1l (keesun:123 을 BASE 64)
+    * 보통, 브라우저 기반 요청이 클라이언트의 요청을 처리할 때 자주 사용.
+    * 보안에 취약하기 때문에 반드시 HTTPS를 사용할 것을 권장.
+
+### 요청 캐시 필터: RequestCacheAwareFilter (신경 X)
+* 현재 요청과 관련 있는 캐시된 요청이 있는지 찾아서 적용하는 필터.
+    * 캐시된 요청이 없다면, 현재 요청 처리
+    * 캐시된 요청이 있다면, 해당 캐시된 요청 처리
+ex) 로그인안하고 dashboard 접근 -> login -> dashboard로 보내주는 필터
+
+### 시큐리티 관련 서블릿 스팩 구현 필터: SecurityContextHolderAwareRequestFilter (신경 X)
+* 시큐리티 관련 서블릿 API를 구현해주는 필터
+    * HttpServletRequest#authenticate(HttpServletResponse)
+    * HttpServletRequest#login(String, String)
+    * HttpServletRequest#logout()
+    * AsyncContext#start(Runnable)
+    
+![35](./img/35.PNG)
+
+### 익명 인증 필터: AnonymousAuthenticationFilter (신경 X)
+* 현재 SecurityContext에 Authentication이 null이면 “익명 Authentication”을 만들어 넣어주고, null이 아니면 아무일도 하지 않는다.
+* 기본으로 만들어 사용할 “익명 Authentication” 객체를 설정할 수 있다.
+```java
+http.anonymous()
+    .principal()
+    .authorities()
+    .key()
+```
