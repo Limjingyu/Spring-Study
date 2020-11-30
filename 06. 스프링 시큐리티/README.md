@@ -923,3 +923,360 @@ http.anonymous()
     .authorities()
     .key()
 ```
+
+### 세션 관리 필터: SessionManagementFilter
+* https://docs.spring.io/spring-security/site/docs/5.1.5.RELEASE/reference/htmlsingle/#session-mgmt 
+* 세션 변조 방지 전략 설정: SessionFixation
+    * 세션 변조 : https://www.owasp.org/index.php/Session_fixation 
+    * 아래 설정을 HttpSecurity http에서 아래 설정들을 넣어줄 수 있다
+        * none
+        * newSession
+        * migrateSession (servlet 3.0 - 컨테이너 사용시 기본값)
+        * changeSessionId (sevlet 3.1 + 컨테이너 사용 시 기본값)
+            * springboot 2.1 이상이면 tomcat은 9.x이고 servlet은 4.0버전이다
+    * https://docs.spring.io/spring-security/site/docs/5.1.5.RELEASE/reference/htmlsingle/#nsa-session-management-attributes 
+* 유효하지 않은 세션을 리다이렉트 시킬 URL 설정
+    * invalidSessionUrl
+* 동시성 제어 : maximumSessions
+    * 여러 브라우저에서 로그인을 할 수 있으므로 추가 로그인을 막을 지 여부 설정 (defaults false)
+    * 하나의 세션만 허용하려면 http.sessionManagement().maximumSessions(1)을 설정하면 된다
+        * 기본 전략은 기존의 세션을 만료시킴
+        * 새로운 세션을 로그인하지 못하도록하려면 http.sessionManagement().maximumSessions(1).maxSessionPreventsLogin(true)를 설정한다. default = false
+    * https://docs.spring.io/spring-security/site/docs/5.1.5.RELEASE/reference/htmlsingle/#nsa-concurrency-control 
+* 세션 생성 전략 : sessionCreationPolicy
+    * IF_REQUIRED (default)
+    * NEVER : 기존에 session이 있다면 그것을 씀
+    * STATELESS : 아예 session을 사용하지 않음. form 기반에서는 session을 써야만 한다
+    * ALWAYS
+ 
+### 인증/인가 예외 처리 필터 : ExceptionTranslationFilter
+* ExceptionTranslationFilter는 FilterSecurityInterceptor를 실행(chain.doFilter())하여 FilterSecurityInterceptor에서 발생하는 AuthenticationException, AccessDeniedException을 처리한다. AuthenticationException이 발생할 경우 AuthenticationEntryPoint로 보내어 인증(form 인증이라면 로그인)화면으로 보낸다. AccessDeniedException이 발생하면 AccessDeniedHandler를 실행하여 403 error를 주게 된다.
+* 인증, 인가 에러 처리를 담당하는 필터
+    * AuthenticationEntryPoint
+    * AccessDeniedHandler
+* AccessDenied page customizing
+    * code
+   ```java
+   // SecurityConfig.java
+   configure(HttpSecurity http) {
+      // Add access denied page
+      http.exceptionHandling()
+      .accessDeniedPage("/access-denied");
+      // If you want to handle access denied exception, use this
+      .accessDeniedHandler(new AccessDeniedHandler() {
+         @Override
+         public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException exception) {
+            UserDetails principal = (UserDetails_ SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            String username = principal.getUsername();
+            log.error(username + "is denied to access " + request.getRequestURI());
+            response.sendRedirect("/access-denied");
+         }
+      }
+   }
+   // AccessDeniedController
+   @Controller
+   public class AccessDeniedController {
+      @GetMapping("/access-denied")
+      public String accessDenied(Principal principal, Model model) {
+         model.addAttribute("name", principal.getName());
+         return "access-denied";
+      }
+   }
+
+   // access-denied.html
+   <!DOCTYPE html>
+      <html lang="en" xmlns:th="http://www.thymeleaf.org"> 
+   <head> 
+   <meta charset="UTF-8"> 
+   <title>Access Denied</title> 
+   </head> 
+   <body>
+      <h1><span th:text="${name}">Name</span>, you can't access to the resource.</h1> 
+   </body>
+    </html> 
+   ```
+ 
+### 인가 처리 필터 : FilterSecurityInterceptor
+* https://docs.spring.io/spring-security/site/docs/5.1.5.RELEASE/reference/htmlsingle/#exception-translation-filter 
+* HTTP 리소스 시큐리티 처리를 담당하는 필터. AccessDecisionManager를 사용하여 인가를 처리한다
+* HTTP 리소스 시큐리티 설정, 아래 설정이 리소스에 접근할 때 필요한 권한을 명시하는 것이다.
+```java
+http.authorizeRequests()
+   .mvcMatchers("/", "/info", "/account/**", "/signup").permitAll()
+   .mvcMatchers("/admin").hasAuthority("ROLE_ADMIN")
+   .mvcMatchers("/user").hasRole("USER") // hasRole은 "ROLE_"가 자동으로 prefix로 붙는다. hasAuthority는 "ROLE_"을 직접 붙여주어야 한다
+   .anyRequest().authenticated()
+   .expressionHandler(expressionHandler()); 
+```
+ 
+### 토큰 기반 인증 필터 : RememberMeAuthenticationFilter
+* 세션이 사라지거나 만료가 되더라도 쿠키 또는 DB를 사용하여 저장된 토큰 기반으로 인증을 지원하는 필터
+    * 예를 들면 로그인 유지하기 버튼
+    * 원래는 쿠키에 JSESSIONID를 저장하여 클라이언트에 주고 이 세션을 가지고 로그인 유지 상태를 확인하지만 rememberMe을 활성화 한다면 JSESSIONID를 지우고 요청을 보내도 쿠키에 "remember-me"값이 있어서 이 값으로 로그인 상태가 유지된다. 
+    * RememberMeAuthenticationFilter.java를 디버깅
+        * JSESSIONID가 없는 경우에 쿠키의 remember-me 값으로 인증을 하고 security context에 인증 정보를 둔다. 다만 토큰은 RememberMeAuthenticationToken이다
+* RememberMe 설정
+```java
+http.rememberMe()
+   .userDetailsService(accountService)
+   .key("remember-me-sample");
+```
+* 쿠키 플러그인
+* https://chrome.google.com/webstore/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg?hl=en 
+ 
+### 커스텀 필터 추가하기
+* GenericFilterBean을 상속받아서 만들어도 되고 servletFilter를 구현해도 된다. GenericFilterBean이 조금 더 스프링 친화적이다. 다른 것 없이 doFilter만 구현해주어도 된다
+*  code
+```java
+public class LoggingFilter extends GenericFilterBean {
+    private Logger logger = LoggerFactory.getLogger(this.getClass());
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start(((HttpServletRequest)request).getRequestURI());
+        chain.doFilter(request, response);
+        stopWatch.stop();
+        logger.info(stopWatch.prettyPrint());
+    }
+}
+// configure(HttpSicurity http) {
+   http.addFilterBefore(new LoggingFilter(), WebAsyncManagerIntegrationFilter.class);
+}
+```
+ 
+ 
+### 타임리프 스프링 시큐리티 확장팩
+* https://github.com/thymeleaf/thymeleaf-extras-springsecurity/blob/3.0-master/README.markdown 
+* View에서 spring security와 관련된 Authentication와 Authorization을 참조하기
+* 의존성 추가
+    * group : org.thymeleaf.extras
+    * name : thymeleaf-extras-springsecurity5
+    * 스프링 부트를 사용하고 있어서 별도의 빈을 설정할 필요 없이 의존성만 추가해도 된다
+* Authentication과 Authorization 참조하여 로그인 유무에 따른 로그인/로그아웃 보여주기
+```html
+<div th:if="${#authorization.expr('isAuthenticated()')}">
+   <h2 th:text="${#authentication.name}"></h2>
+   <a href="/logout" th:href="@{/logout}">Logout</a> 
+</div>
+<div th:unless="${#authorization.expr('isAuthenticated()')}"> 
+   <a href="/login" th:href="@{/login}">Login</a> 
+</div> 
+```
+ 
+### sec 네임 스페이스
+* 위에서 authorization의 메소드를 사용하는게 툴의 지원이 안되어서 type safe하지 않음
+* namespace를 추가하면 자동 완성이 가능해짐
+    * xmlns:sec="http://www.thymeleaf.org/extras/spring-security" 
+* code
+```html
+<div sec:authorize="isAuthenticated()">
+   <h2 sec:authentication="name">Name</h2>
+   <a href="/logout" th:href="@{/logout}">Logout</a> 
+</div>
+<div sec:authorize="!isAuthenticated()"> 
+   <a href="/login" th:href="@{/login}">Login</a> 
+</div> 
+```
+ 
+### 메소드 시큐리티
+* 스프링 시큐리티를 웹이 아니라 평범한 앱에서도 적용 가능하다
+* https://docs.spring.io/spring-security/site/docs/5.1.5.RELEASE/reference/htmlsingle/#jc-method 
+* https://www.baeldung.com/spring-security-method-security 
+* @EnableGlobalMethodSecurity
+    * @EnableGlobalMethodSecurity(jsr250Enabled = true, prePostEnabled = true, securedEnabled = true)
+* @Secured와 @RollAllowed
+    * 메소드 호출 이전에 권한을 확인한다
+    * SpEL을 사용 하지 못한다
+* @PreAuthorize와 @PostAuthorize
+    * 메소드 호출 이전 이후에 권한을 확인할 수 있다
+    * SpEL을 사용하여 메소드 매개변수와 리턴값을 검증할 수도 있다
+* code
+```java
+public class SampleService {
+   @Secured("ROLE_USER")
+   public void dashboard() {
+      …
+   }
+}
+// test
+@RunWith(SpringRunner.class)
+@SpringBootTest
+public class Test {
+   @Autowired 
+   SampleService sampleService;
+   @Autowired
+   AccountService accountService;
+   @Autowired
+   AuthenticationManager authenticationManager;
+
+   @Test
+   public void dashboard() {
+      // 아래 인증 정보 대신 @WithMockUser annotation을 사용할 수 있다
+      Account account = new Account();
+      account.setRole("USER");
+      account.setUsername("suhyeon");
+      account.setPassword("123");
+      accountService.createNew(account);
+
+      UserDetails userDetails = accountService.loadUserByUsername("suhyeon");
+
+      // UserDetails is Principal, constructor of UsernamePasswordAuthenticationToken has Principal as a first param, and Credential as a second param
+      UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(userDetails, "123");
+
+      Authentication authentication = authenticationManager.authenticate(token);
+
+      SecurityContextHolder.getContext().setAuthentication(authentication);
+
+      // 인증 정보 없이 그냥 호출하면 AuthenticationCredentialsNotFoundException 발생
+      sampleService.dashboard();
+   }
+}
+// AuthenticationManager는 빈으로 등록되어있지 않으니 아래와 같이 설정해주어야 한다
+// in SecurityConfig
+@Bean
+@Override
+public AuthenticationManager authenticationManagerBean() throws Exception {
+   return super.authenticationManagerBean();
+}
+```
+
+* method security를 위해서는 계층형으로 role을 사용할 수 있도록 설정해주어야 한다. 
+```java
+@Configuration
+@EnableGlobalMethodSecurity(securedEnabled = true, prePostEnabled = true, jsr250Enabled = true)
+public class MethodSecurityConfig extends GlobalMethodSecurityConfiguration { 
+   @Override
+   protected AccessDecisionManager accessDecisionManager() { 
+      RoleHierarchyImpl roleHierarchy = new RoleHierarchyImpl();
+      roleHierarchy.setHierarchy("ROLE_ADMIN > ROLE_USER");
+      AffirmativeBased accessDecisionManager = (AffirmativeBased) super.accessDecisionManager();
+      accessDecisionManager.getDecisionVoters().add(new RoleHierarchyVoter(roleHierarchy)); 
+      return accessDecisionManager; 
+   }
+} 
+```
+ 
+ 
+### @AuthenticationPrincipal
+* web mvc handler argument로 Principal 객체를 받을 수 있다
+    * SecurityContext에서 가져오는 Principal은 우리가 구현한 UserDetails
+    * controller에서 파라미터로 받아오는 Principal은 java.security.Principal
+* Account로 Principal을 만들어 보자 (UserDetails == Principal)
+* code
+```java
+public class UserAccount extends User {
+   private Account account;
+
+   public UserAccount (ACCOUNT account) {
+      super.account.getUsername(), account.getPassword(), Lists.of(new SimpleGrantedAuthority("ROLE_" + account.getRole()));
+   }
+ 
+   // getter
+}
+// AccountService
+…
+@Override
+public UserDetails loadUserByUsername(String username) {
+   Account account = accountRepository.findByUsername(username);
+
+   return new UserAccount(account);
+}
+// SampleController
+…
+@GetMapping("/")
+public String index(Model model, @AuthenticationPrincipal UserAccount userAccount) {
+   …
+}
+// 바로 Account로 받기
+@GetMapping("/")
+public String index(Model model, @AuthenticationPrincipal(expression = "#this == 'anonymousUser' ? null : account") Account account) {
+   …
+}
+// annotation을 생성하여 줄이자
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.PARAMETER)
+@AuthenticationPrincipal(expression = "#this == 'anonymousUser' ? null : account")
+public @interface CurrentUser{
+}
+```
+ 
+ 
+### 스프링 데이터 연동
+* @Query 애노테이션에서 SpEL로 principal 참조할 수 있는 기능 제공. 
+* 의존성 추가
+    * group : org.springframework.security
+    * name : spring-security-data
+    * version : ${spring-security.version} // spring security version과 동일한 버전을 사용할 수 있다
+* code
+```java
+// Book entity
+@Entity
+public class Book {
+   @Id @GeneratedValue
+   private Integer id;
+   private String title;
+   @ManyToOne
+   private Account author;
+   public Integer getId() {
+      return id;
+   }
+}
+// BookRepository
+public interface BookRepository extends JpaRepository<Book, Integer> {
+@Query("SELECT b FROM Book b WHERE b.author.id = ?#{principal.account.id}")
+List<Book> findCurrentUserBooks();
+}
+// DefaultDataGenerator.java
+@Bean
+public class DefaultDataGenerator implements ApplicationRunner {
+   @Autowired
+   AccountService accountService;
+   @Autowired
+   BookRepository bookRepository;
+
+   @Override
+   public void run(ApplicationArguments args) throws Exception {
+      Account suhyeon = createUser("suhyeon");
+      Account ksh = createUser("ksh");
+
+      createBook("spring", suhyeon);
+      createBook("hibernate", ksh);
+   }
+
+   private void createBook(String title, Account account) {
+      bookRepository.save(new Book(title, account));
+   }
+
+   private Account createUser(String username) {
+      return accountService.createNew(new Account(username, "123", "USER"));
+   }
+}
+// SampleController
+// to show user's book
+@GetMapping("/user")
+public String user(Model model, Principal principal) {
+   model.addAttribute("message", "hello User, " + principal.getName());
+   model.addAttribute("books", bookRepository.findCurrentUserBooks());
+   return "user";
+}
+// user.html
+<tr th:each="book : ${books}">
+<td><span th:text="${book.title}"> Title </span></td> 
+</tr> 
+```
+ 
+### 스프링 시큐리티 마무리
+* 이번 강좌에서 다룬 내용 
+    * 스프링 시큐리티 아키텍처 
+    * 폼기반웹애플리케이션인증기능 
+    * 로그인/로그아웃 페이지 커스터마이징 
+    * 여러인증관련응답헤더 
+    * CSRF
+    * 세션관리 
+    * 타임리프 연동 
+    * 스프링 데이터 연동
+* 다루지 않은 내용 
+    * ACL 
+    * WebSocket 
+    * OAuth 2.0 
+    * Reactive 
