@@ -358,4 +358,283 @@ public class JpaRunner implements ApplicationRunner {
     * @OneToMany의 기본값은 Lazy
     * @ManyToOne의 기본값은 Eager
 
+### JPA 프로그래밍 7. 쿼리
+* JPQL (HQL)
+    * Java Persistence Query Language / Hibernate Query Language
+    * 데이터베이스 테이블이 아닌 엔티티 객체 모델 기반으로 쿼리 작성
+    * JPA 또는 하이버네이트가 해당 쿼리를 SQL로 변환해서 실행
+    * (참고) 이 방법은 타입 세이프하지 않다
+    * https://docs.jboss.org/hibernate/orm/5.2/userguide/html_single/Hibernate_User_Guide.html#hql
+    * code
+TypedQuery<Post> query = entityManager.createQuery("SELECT p FROM Post As p", Post.class);
+List<Post> posts = query.getResultList();
+* Criteria
+    * 타입 세이프 쿼리
+    * https://docs.jboss.org/hibernate/orm/5.2/userguide/html_single/Hibernate_User_Guide.html#criteria
+    * code
+CriteriaBuilder builder = entityManager.getCriteriaBuilder();
+CriteriaQuery<Post> criteria = builder.createQuery(Post.class);
+Root<Post> root = criteria.from(Post.class);
+criteria.select(root);
+List<Post> posts = entityManager.createQuery(criteria).getResultList();
+* Native Query
+    * SQL 쿼리 실행하기
+    * https://docs.jboss.org/hibernate/orm/5.2/userguide/html_single/Hibernate_User_Guide.html#sql
+    * code
+List<Post> posts = entityManager
+                .createNativeQuery("SELECT * FROM Post", Post.class)
+                .getResultList();
+ 
+### 스프링 데이터 JPA 원리
+* JpaRepository<Entity, Id> 인터페이스
+    * 매직 인터페이스
+    * @Repository가 없어도 빈으로 등록
+* EnableJpaRepositories
+    * 매직의 시작은 여기서 부터
+    * spring boot를 안썼다면 이 애노테이션을 @Configuration이 붙어있는 클래스에 추가했어야 했다. 그러나 부트가 해주고 있기 때문에 설정하지 않아도 된다
+* 매직은 어떻게 이루어 지나?
+    * 시작은 @Import(JpaRepositoriesRegistrar.class)
+        * 이게 JpaRepository 들을 빈으로 등록해줌
+    * 핵심은 ImportBeanDefinitionRegistrar 인터페이스
+        * 프로그래밍을 통해 빈 생성을 할 수 있도록 해준다.
+* 장점?
+    * 코드의 간결함
+    * 직접 작성할 test가 거의 없음
+ 
+### 핵심 개념 마무리
+* 데이터베이스와 자바
+* 패러다임 불일치
+* ORM이란?
+* JPA 사용법 (엔티티, 밸류 타입, 관계 맵핑)
+* JPA 특징 (엔티티 상태 변화, Cascade, Fetch, 1차 캐시, ...)
+* 주의할 점
+    * 반드시 발생하는 SQL을 확인할 것
+* 팁
+    * logging.level.org.hibernate.SQL=debug (spring.jpa.show-sql=true와 동일한 기능)
+    * logging.level.org.hibernate.type.descriptor.sql=trace : sql을 찍었지만 ?로 값이 나오는 것을 실제 값으로 보이도록 설정
+
+## 2부 스프링 데이터 JPA 활용
+
+### 스프링 데이터 JPA 활용 파트 소개
+* 스프링 데이터 : SQL & NoSQL 저장소 지원 프로젝트의 묶음
+* 스프링 데이터 Common : 여러 저장소 지원 프로젝트의 공통 기능 제공
+* 스프링 데이터 REST : 저장소 데이터를 하이퍼미디어 기반 HTTP 리소스로(REST API로) 제공하는 프로젝트
+* 스프링 데이터 JPA : 스프링 데이터 Common이 제공하는 기능에 JPA 관련 기능 추가
+ 
+### 스프링 데이터 Common 1. 리포지토리
+* Spring Data Common
+    * Repository
+    * CrudRepository (extends Repository<T, ID>)
+    * PagingAndSortingRepository (extends CrudRepository<T, ID>)
+* Spring Data JPA
+    * JpaRepository (extends PagingAndSortingRepository<T, ID>)
+* @NoRepositoryBean
+    * 중간단계의 repository를 빈으로 생성하는 것을 방지
+* test
+    * h2, spring boot starter test 추가
+    * code
+   ```java
+   @RunWith(SpringRunner.class)
+   @DataJpaTest
+   public class PostRepositoryTest extends TestCase {
+      @Autowired
+      PostRepository postRepository;
+
+      @Test
+      // @DataJpaTest annotation has @Transactional.
+      // Function having @Test and @Transactional annotation in spring boot test becomes rollback after test is done.
+      // That's why this test doesn't send any queries. So you want to see all queries, Use @Rollback(false)
+      public void crudRepository() {
+         // Given
+         Post post = new Post();
+         post.setTitle("hello spring boot common");
+         assertThat(post.getId()).isNull();
+
+         // When
+         Post newPost = postRepository.save(post);
+
+         // Then
+         assertThat(newPost.getId()).isNotNull();
+
+         // When
+         List<Post> posts = postRepository.findAll();
+         assertThat(posts.size()).isEqualTo(1);
+         assertThat(posts).contains(newPost);
+
+         // When
+         Page<Post> page = postRepository.findAll(PageRequest.of(0, 10));
+
+         // Then
+         assertThat(page.getTotalElements()).isEqualTo(1);
+         assertThat(page.getNumber()).isEqualTo(0);
+         assertThat(page.getSize()).isEqualTo(10);
+         assertThat(page.getNumberOfElements()).isEqualTo(1);
+
+         // When
+         postRepository.findByTitleContains("spring", PageRequest.of(0, 10));
+
+         // Then
+         assertThat(page.getTotalElements()).isEqualTo(1);
+         assertThat(page.getNumber()).isEqualTo(0);
+         assertThat(page.getSize()).isEqualTo(10);
+         assertThat(page.getNumberOfElements()).isEqualTo(1);
+
+         // When
+         long spring = postRepository.countByTitleContains("spring");
+
+         // Then
+         assertThat(spring).isEqualTo(1);
+      }
+   }
+   ```
+ 
+### 스프링 데이터 Common 2. 인터페이스 정의하기
+* Repository 인터페이스로 공개할 메소드를 직접 일일이 정의하고 싶다면
+* 특정 리포지토리 당
+    * @RepositoryDefinition
+    * code
+   ```java
+   @RepositoryDefinition(domainClass = Comment.class, idClass = Long.class)
+   public interface CommentRepository {
+      Comment save(Comment comment);
+      List<Comment> findAll();
+   }
+   ```
+* 공통 인터페이스 정의
+    * 위의 기능을 다른 리포지토리에도 전부 사용할 것이라면 아래와 같이 사용할 수 있다.
+    * @NoRepositoryBean
+    * code
+   ```java
+   @NoRepositoryBean
+   public interface MyRepository<T, ID extends Serializable> extends Repository<T, ID> {
+      <E extends T> E save(E entity);
+      List<T> findAll();
+   }
+   // Modify comment repository
+   public interface CommentRepository extends MyRepository<Comment, Long> {
+   }
+   ```
+### 스프링 데이터 Common 3. Null 처리
+* Spring data 2.0 부터 자바 8의 Optional을 지원
+    * Optional<Post> findById(Long id);
+    * Optional<Post> post = findById(10L);
+    * post.orElseThrow(() -> new RuntimeException("…"));
+* 기본적으로 콜렉션은 Null을 리턴하지 않고 비어있는 콜렉션을 리턴합니다
+* Spring framework 5.0 부터 지원하는 Null annotation지원
+    * @NonNullApi, @NonNull, @Nullable
+        * @Nullable Post findById(@NonNull Long id);
+    * 런타임 체크 지원 함
+    * JSR 305 애노테이션을 메타 애노테이션으로 가지고 있음 (IDE 및 빌드 툴 지원)
+* IntelliJ 설정 (intellij에서 아직 인지를 못하는 상태)
+    * Build, Execution, Deployment
+        * Compiler
+            * Add runtime assertion for notnull-annotated methods and parameters
+            * 
+    * 프로젝트 재시작 시 적용이 되고, 적용되면 파라미터에 @NonNull이 붙어있음에도 불구하고 null을 파라미터로 넘겼을 때 노란색 배경에 경고가 나오게 된다
+    * 
+### 스프링 데이터 Common 4. 쿼리 만들기
+* 스프링 데이터 저장소의 메소드 이름으로 쿼리 만드는 방법
+    * 메소드 이름을 분석해서 쿼리 만들기 (CREATE)
+        * List<Comment> findByCommentContains(String keyword);
+    * 미리 정의해 둔 쿼리를 찾아 사용하기 (USE_DECLARED_QUERY)
+        * JPQL(default) : @Query ("SELECT c FROM comment AS c")
+        * NativeQuery : @Query (value = "SELECT c FROM comment AS c", nativeQuery = true)
+    * 미리 정의한 쿼리 찾아보고 없으면 만들기 (CREATE_IF_NOT_FOUND)
+        * 기본 전략
+* 쿼리 만드는 방법
+    * 리턴 타입 {접두어}{도입부}By{프로퍼티 표현식}(조건식)[(And|Or){프로퍼티 표현식}(조건식)]{정렬 조건} (파라미터)
+    * 
+* 쿼리 찾는 방법
+    * 메소드 이름으로 쿼리를 표현하기 힘든 경우에 사용
+    * 저장소 기술에 따라 다름
+    * JPA: @Query, @NamedQuery
+* 쿼리를 메소드로 생성했을 때 spring data jpa가 생성할 수 없는 쿼리의 경우 빌드 중 빈 생성 시 에러가 남
+ 
+### 스프링 데이터 Common 5. 쿼리 만들기 실습
+* 기본 예제
+List<Person> findByEmailAddressAndLastname(EmailAddress emailAddress, String lastname); 
+// distinct List<Person> findDistinctPeopleByLastnameOrFirstname(String lastname, String firstname); 
+List<Person> findPeopleDistinctByLastnameOrFirstname(String lastname, String firstname); 
+// ignoring case  List<Person> findByLastnameIgnoreCase(String lastname); // ignoring case List<Person> findByLastnameAndFirstnameAllIgnoreCase(String lastname, String firstname); 
+* 정렬
+List<Person> findByLastnameOrderByFirstnameAsc(String lastname); List<Person> findByLastnameOrderByFirstnameDesc(String lastname); 
+* 페이징
+// Use PageRequest for Pageable parameter
+PageRequset pageRequest = PageRequest.of(0,10,Sort.by(Sort.Direction.DESC, "likeCount"));
+Page<User> findByLastname(String lastname, Pageable pageable);
+Slice<User> findByLastname(String lastname, Pageable pageable); 
+List<User> findByLastname(String lastname, Sort sort); 
+List<User> findByLastname(String lastname, Pageable pageable); 
+* 스트림
+Stream<User> readAllByFirstnameNotNull();
+* try-with-resource를 사용할 것. Stream을 사용한 후에는 close()해주어야 함
+ 
+### 스프링 데이터 Common 6. 비동기 쿼리 메소드
+* 비동기 쿼리
+@Async Future<User> findByFirstname(String firstname);
+@Async CompletableFuture<User> findByFirstname(String firstname);
+@Async ListenableFuture<User> findByFirstname(String firstname);
+* 해당 메소드를 스프링 TaskExecutor에 전달하여 별도의 스레드에서 실행함
+* Reactive와는 다른 것
+* 권장하지 않는 이유
+    * 테스트 코드의 작성이 어려움
+        * @Test method가 실행될 때 callback인 자식 쓰레드가 실행되기 전 부모 쓰레드가 먼저 끝나버림
+    * 코드 복잡도 증가
+    * 성능상 이득이 없음
+        * DB부하는 결국 같고
+        * 메인 쓰레드 대신 백그라운드 쓰레드가 일하는 정도의 차이
+        * 단, 백그라운드로 실행하고 결과를 받을 필요는 없는 작업이라면 @Async를 사용해서 응답 속도를 향상시킬 수는 있다
+ 
+### 스프링 데이터 Common 7. 커스텀 리포지토리 만들기
+* 쿼리 메소드(쿼리 생성과 쿼리 찾아쓰기)로 해결이 되지 않는 경우 직접 코딩으로 구현 가능
+    * 스프링 데이터 리포지토리 인터페이스에 기능 추가
+        * code
+         ```java
+         public interface PostCustomRepository {
+				List<Post> findMyPost();
+			}
+			
+			@Repository
+			@Transactional
+			public class PostCustomRepositoryImpl implements PostCustomRepository {
+			
+				@Autowired
+				EntityManager entityManager;
+			
+				@Override
+				public List<Post> findMyPost() {
+					System.out.println("custom findMyPost");
+					return entityManager.createQuery("SELECT p FROM Post AS p", Post.class).getResultList();
+				}
+			}
+			
+			public interface PostRepository extends JpaRepository<Post, Long>, PostCustomRepository {
+			}
+         ```
+ 
+* 스프링 데이터 리포지토리 기본 기능 덮어쓰기 가능
+    * code
+   ```java
+   public interface PostCustomRepository<T> {
+      List<Post> findMyPost();
+      // If duplicated function exist, spring data jpa use function defined by user
+      void delete(T entity);
+   }
+
+   @Override
+   public void delete(Post entity) {
+      System.out.println("custom delete");
+      entityManager.detach(entity);
+   }
+   ```
+
+* 구현 방법
+    * 커스텀 리포지토리 인터페이스 정의
+    * 인터페이스 구현 클래스 만들기
+        * 기본 접미어를 Impl를 설정해야만 spring data jpa에서 커스텀하게 사용 가능하다
+        * 이 postfix를 변경하려면 @EnableJpaRepositories(repositoryImplementationPostfix = "") 를 이용 
+    * 엔티티 리포지토리에 커스텀 리포지토리 인터페이스 추가
+* 기능 추가하기
+* 기본 기능 덮어쓰기
+* 접미어 설정하기
 
