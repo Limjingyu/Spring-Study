@@ -535,7 +535,9 @@ List<Post> posts = entityManager
 ### 스프링 데이터 Common 4. 쿼리 만들기
 * 스프링 데이터 저장소의 메소드 이름으로 쿼리 만드는 방법
     * 메소드 이름을 분석해서 쿼리 만들기 (CREATE)
-        * List<Comment> findByCommentContains(String keyword);
+        ```java
+        List<Comment> findByCommentContains(String keyword);
+        ```
     * 미리 정의해 둔 쿼리를 찾아 사용하기 (USE_DECLARED_QUERY)
         * JPQL(default) : @Query ("SELECT c FROM comment AS c")
         * NativeQuery : @Query (value = "SELECT c FROM comment AS c", nativeQuery = true)
@@ -552,28 +554,38 @@ List<Post> posts = entityManager
  
 ### 스프링 데이터 Common 5. 쿼리 만들기 실습
 * 기본 예제
+```java
 List<Person> findByEmailAddressAndLastname(EmailAddress emailAddress, String lastname); 
 // distinct List<Person> findDistinctPeopleByLastnameOrFirstname(String lastname, String firstname); 
 List<Person> findPeopleDistinctByLastnameOrFirstname(String lastname, String firstname); 
 // ignoring case  List<Person> findByLastnameIgnoreCase(String lastname); // ignoring case List<Person> findByLastnameAndFirstnameAllIgnoreCase(String lastname, String firstname); 
+```
 * 정렬
+```java
 List<Person> findByLastnameOrderByFirstnameAsc(String lastname); List<Person> findByLastnameOrderByFirstnameDesc(String lastname); 
+```
 * 페이징
+```java
 // Use PageRequest for Pageable parameter
 PageRequset pageRequest = PageRequest.of(0,10,Sort.by(Sort.Direction.DESC, "likeCount"));
 Page<User> findByLastname(String lastname, Pageable pageable);
 Slice<User> findByLastname(String lastname, Pageable pageable); 
 List<User> findByLastname(String lastname, Sort sort); 
 List<User> findByLastname(String lastname, Pageable pageable); 
+```
 * 스트림
+```java
 Stream<User> readAllByFirstnameNotNull();
+```
 * try-with-resource를 사용할 것. Stream을 사용한 후에는 close()해주어야 함
- 
+
 ### 스프링 데이터 Common 6. 비동기 쿼리 메소드
 * 비동기 쿼리
+```java
 @Async Future<User> findByFirstname(String firstname);
 @Async CompletableFuture<User> findByFirstname(String firstname);
 @Async ListenableFuture<User> findByFirstname(String firstname);
+```
 * 해당 메소드를 스프링 TaskExecutor에 전달하여 별도의 스레드에서 실행함
 * Reactive와는 다른 것
 * 권장하지 않는 이유
@@ -638,3 +650,490 @@ Stream<User> readAllByFirstnameNotNull();
 * 기본 기능 덮어쓰기
 * 접미어 설정하기
 
+### 스프링 데이터 Common: 기본 리포지토리 커스터마이징
+* 모든 리포지토리에 공통적으로 추가하고 싶은 기능이 있거나 덮어쓰고 싶은 기본 기능이 있다면
+    * 1. JpaRepository를 상속 받는 인터페이스 정의 : @NoRepositoryBean
+    * 2. 기본 구현체를 상속 받는 커스텀 구현체 만들기
+    * 3. @EnableJpaRepositories에 설정 : repositoryBaseClass
+```java
+// MyRepository
+@NoRepositoryBean
+public interface MyRepository<T, ID extends Serializable> extends JpaRepository<T, ID> {
+    boolean contains(T entity);
+}
+
+// SimpleMyRepository
+public class SimpleMyRepository<T, ID extends Serializable> extends SimpleJpaRepository<T, ID> implements MyRepository<T, ID> {
+     private EntityManager entityManager;
+     public SimpleMyRepository(JpaEntityInformation<T, ?> entityInformation, EntityManager entityManager) {
+         super(entityInformation, entityManager);
+         this.entityManager = entityManager;
+     }
+     @Override
+     public boolean contains(T entity) {
+        return entityManager.contains(entity);
+     }
+}
+
+// Application
+@EnableJpaRepositories(repositoryBaseClass = SimpleMyRepository.class)
+
+// PostReposiory
+public interface PostRepository extends MyRepository<Post, Long> {
+}
+```
+
+### 스프링 데이터 Common: 도메인 이벤트
+* 도메인 관련 이벤트를 발생시키기
+* 스프링 프레임워크의 이벤트 관련 기능
+    * https://docs.spring.io/spring/docs/current/spring-framework-reference/core.html#context-functionality-events
+    * ApplicationContext extends ApplicationEventPublisher
+    * 이벤트: extends ApplicationEvent
+    * 리스너
+        * implements ApplicationListener<E extends ApplicationEvent>
+        * @EventListener
+        
+
+```java
+// event publish
+public class PostPublishedEvent extends ApplicationEvent {
+
+    private final Post post;
+
+    public PostPublishedEvent(Object source) {
+        super(source);
+        this.post = (Post) source;
+    }
+
+    public Post getPost() {
+        return post;
+    }
+}
+
+// event listener
+public class PostListener implements ApplicationListener<PostPublishedEvent> {
+    @Override
+    public void onApplicationEvent(PostPublishedEvent postPublishedEvent) {
+        System.out.println("=============");
+        System.out.println(postPublishedEvent.getPost().getTitle() + " is published");
+        System.out.println("=============");
+    }
+}
+
+// Test config
+@Configuration
+public class PostRepositoryTestConfig {
+
+    @Bean
+    public PostListener postListener() {
+        return new PostListener();
+    }
+}
+
+// Test
+@RunWith(SpringRunner.class)
+@DataJpaTest
+@Import(PostRepositoryTestConfig.class)
+public class PostRepositoryTest {
+
+    @Autowired
+    private  PostRepository postRepository;
+
+    @Autowired
+    private ApplicationContext applicationContext;
+
+    @Test
+    public void event() {
+        Post post = new Post();
+        post.setTitle("event");
+        PostPublishedEvent event = new PostPublishedEvent(post);
+
+        applicationContext.publishEvent(event);
+    }
+}
+```
+
+* 스프링 데이터의 도메인 이벤트 Publisher
+    * @DomainEvents : 이벤트를 모아놓는 곳
+    * @AfterDomainEventPublication : 이벤트를 지우는 곳
+    * extends AbstractAggregateRoot<E>
+    * 현재는 save() 할 때만 발생 합니다.
+```java
+@Entity
+public class Post extends AbstractAggregateRoot<Post> {
+    ...
+    
+}
+```
+* ㅋ
+
+### 스프링 데이터 Common: QueryDSL
+```java
+// 이게 이게 뭐냐... @_@ 어지러우시죠?? 이 정도 되면 그냥 한글로 주석을 달아 두시는게...
+findByFirstNameIngoreCaseAndLastNameStartsWithIgnoreCase(String firstName, StringlastName)
+```
+* 여러 쿼리 메소드는 대부분 두 가지 중 하나.
+    * Optional<T> findOne(Predicate): 이런 저런 조건으로 무언가 하나를 찾는다.
+    * List<T>|Page<T>|.. findAll(Predicate): 이런 저런 조건으로 무언가 여러개를 찾는다.
+    * QuerydslPredicateExecutor 인터페이스
+* QueryDSL
+    * http://www.querydsl.com/
+    * 타입 세이프한 쿼리 만들 수 있게 도와주는 라이브러리
+    * JPA, SQL, MongoDB, JDO, Lucene, Collection 지원
+    * QueryDSL JPA 연동 가이드
+* 스프링 데이터 JPA + QueryDSL
+    * 인터페이스: QuerydslPredicateExecutor<T>
+    * 구현체: QuerydslPredicateExecutor<T>
+* 연동 방법
+    * 기본 리포지토리 커스터마이징 안 했을 때. (쉬움)
+    * 기본 리포지토리 커스타마이징 했을 때. (해맬 수 있으나... 제가 있잖습니까)
+* 의존성 추가
+```xml
+<dependency>
+    <groupId>com.querydsl</groupId>
+    <artifactId>querydsl-apt</artifactId>
+</dependency>
+<dependency>
+    <groupId>com.querydsl</groupId>
+    <artifactId>querydsl-jpa</artifactId>
+</dependency>
+
+<plugin>
+    <groupId>com.mysema.maven</groupId>
+    <artifactId>apt-maven-plugin</artifactId>
+    <version>1.1.3</version>
+    <executions>
+        <execution>
+            <goals>
+                <goal>process</goal>
+            </goals>
+            <configuration>
+                <outputDirectory>target/generated-sources/java</outputDirectory>
+                <processor>com.querydsl.apt.jpa.JPAAnnotationProcessor</processor>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+```
+
+```java
+// PostRepository
+public interface PostRepository extends JpaRepository<Post, Long>, QuerydslPredicateExecutor<Post> {}
+
+// SimpleMyRepository
+public class SimpleMyRepository<T, ID extends Serializable> extends QuerydslJpaRepository<T, ID><T, ID> implements MyRepository<T, ID> {}
+```
+
+### 보강
+* QuerydslRepositorySupport..?
+* 
+```java
+// MyRepository
+public interface PostRepository extends MyRepository<Post, Long>, QuerydslPredicateExecutor<Post> {}
+
+// SimpleMyRepository
+public class SimpleMyRepository<T, ID extends Serializable> extends SimpleJpaRepository<T, ID> implements MyRepository<T, ID> {}
+```
+
+### 스프링 데이터 Common: Web 1부: 웹 지원 기능 소개
+* 스프링 데이터 웹 지원 기능 설정
+    * 스프링 부트를 사용하는 경우에.. 설정할 것이 없음. (자동 설정)
+    * 스프링 부트 사용하지 않는 경우?
+    ```java
+    @Configuration
+    @EnableWebMvc
+    @EnableSpringDataWebSupport
+    class WebConfiguration {}
+    ```
+* 제공하는 기능
+    * 도메인 클래스 컨버터
+    * @RequestHandler 메소드에서 Pageable과 Sort 매개변수 사용
+    * Page 관련 HATEOAS 기능 제공
+        * PagedResourcesAssembler
+        * PagedResoure
+    * Payload 프로젝션
+        * 요청으로 들어오는 데이터 중 일부만 바인딩 받아오기
+        * @ProjectedPayload, @XBRead, @JsonPath
+    * 요청 쿼리 매개변수를 QueryDSLdml Predicate로 받아오기
+        * ?firstname=Mr&lastname=White => Predicate
+
+### 스프링 데이터 Common: Web 2부: DomainClassConverter
+* 스프링 Converter
+    * https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/core/convert/converter/Converter.html
+    * Formatter도 들어 본 것 같은데...
+```java
+// Controller
+@RestController
+public class PostController {
+
+    @Autowired
+    private PostRepository postRepository;
+
+    @GetMapping("/posts/{id}")
+    public String getPost(@PathVariable("id") Post post) {
+//        Optional<Post> byId = postRepository.findById(id);
+//        Post post = byId.get();
+        return post.getTitle();
+    }
+}
+
+// Test
+@RunWith(SpringRunner.class)
+@SpringBootTest
+@AutoConfigureMockMvc
+public class PostControllerTest {
+
+    @Autowired
+    MockMvc mockMvc;
+
+    @Autowired
+    PostRepository postRepository;
+
+    @Test
+    public void getPost() throws Exception {
+        Post post = new Post();
+        post.setTitle("JPA");
+        postRepository.save(post);
+
+        mockMvc.perform(get("/posts/1"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(content().string("JPA"));
+    }
+}
+```
+
+### 스프링 데이터 Common: Web 3부: Pageable과 Sort 매개변수
+* 스프링 MVC HandlerMethodArgumentResolver
+    * 스프링 MVC 핸들러 메소드의 매개변수로 받을 수 있는 객체를 확장하고 싶을 때 사용하는 인터페이스
+* 페이징과 정렬 관련 매개변수
+    * page: 0부터 시작.
+    * size: 기본값 20.
+    * sort: property,property(,ASC|DESC)
+    * 예) sort=created,desc&sort=title (asc가 기본값)
+
+```java
+//Test
+@GetMapping("/posts")
+public Page<Post> getPosts(Pageable pageable) {
+    return postRepository.findAll(pageable);
+}
+
+// Test
+@Test
+public void getPosts() throws Exception {
+    Post post = new Post();
+    post.setTitle("JPA");
+    postRepository.save(post);
+
+    mockMvc.perform(get("/posts")
+                .param("page", "0")
+                .param("size", "10")
+                .param("sort", "created,desc")
+                .param("sort", "title")
+            )
+            .andDo(print())
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content[0].title", is("JPA")))
+    ;
+}
+```
+
+### 스프링 데이터 Common: Web 4부: HATEOAS
+* Page를 PagedResource로 변환하기
+    * 일단 HATEOAS 의존성 추가 (starter-hateoas)
+    * 핸들러 매개변수로 PagedResourcesAssembler
+    ```java
+    // Controller@GetMapping("/posts")
+    public PagedModel<EntityModel<Post>> getPosts(Pageable pageable, PagedResourcesAssembler<Post> assembler) {
+        return assembler.toModel(postRepository.findAll(pageable));
+    }
+    ```
+    * 리소스로 변환하기 전
+    ```
+    {
+         "content":[
+        ...
+         {
+             "id":111,
+             "title":"jpa",
+             "created":null
+         }
+         ],
+         "pageable":{
+             "sort":{
+                 "sorted":true,
+                 "unsorted":false
+             },
+             "offset":20,
+             "pageSize":10,
+             "pageNumber":2,
+             "unpaged":false,
+             "paged":true
+         },
+         "totalElements":200,
+         "totalPages":20,
+         "last":false,
+         "size":10,
+         "number":2,
+         "first":false,
+         "numberOfElements":10,
+         "sort":{
+             "sorted":true,
+             "unsorted":false
+         }
+    }
+    ```
+    * 리소스로 변환한 뒤
+    ```
+    {
+        _embedded":{
+            "postList":[
+                {
+                    "id":140,
+                    "title":"jpa",
+                    "created":null
+                },
+                ...
+                {
+                    "id":109,
+                    "title":"jpa",
+                    "created":null
+                }
+            ]
+        },
+        "_links":{
+            "first":{
+                "href":"http://localhost/posts?page=0&size=10&sort=created,desc&sort=title,asc"
+            },
+            "prev":{
+                "href":"http://localhost/posts?page=1&size=10&sort=created,desc&sort=title,asc"
+            },
+            "self":{
+                "href":"http://localhost/posts?page=2&size=10&sort=created,desc&sort=title,asc"
+            },
+            "next":{
+                "href":"http://localhost/posts?page=3&size=10&sort=created,desc&sort=title,asc"
+            },
+            "last":{
+                "href":"http://localhost/posts?page=19&size=10&sort=created,desc&sort=title,asc"
+            }
+        },
+        "page":{
+            "size":10,
+            "totalElements":200,
+            "totalPages":20,
+            "number":2
+        }
+    }
+    ```
+### 스프링 데이터 Common: 마무리
+* 스프링 데이터 Repository
+* 쿼리 메소드
+    * 메소드 이름 보고 만들기
+    * 메소드 이름 보고 찾기
+* Repository 정의하기
+    * 내가 쓰고 싶은 메소드만 골라서 만들기
+    * Null 처리
+* 쿼리 메소드 정의하는 방법
+* 리포지토리 커스터마이징
+    * 리포지토리 하나 커스터마이징
+    * 모든 리포지토리의 베이스 커스터마이징
+* 도메인 이벤트 Publish
+* 스프링 데이터 확장 기능
+    * QueryDSL 연동
+    * 웹 지원
+
+### 스프링 데이터 JPA: JPA Repository
+* @EnableJpaRepositories
+    * 스프링 부트 사용할 때는 사용하지 않아도 자동 설정 됨.
+    * 스프링 부트 사용하지 않을 때는 @Configuration과 같이 사용.
+* @Repository 애노테이션을 붙여야 하나 말아야 하나...
+    * 안붙여도 됩니다.
+    * 이미 붙어 있어요. 또 붙인다고 별일이 생기는건 아니지만 중복일 뿐입니다.
+* 스프링 @Repository
+    * SQLExcpetion 또는 JPA 관련 예외를 스프링의 DataAccessException으로 변환해준다.
+
+### 스프링 데이터 JPA: 엔티티 저장하기
+* JpaRepository의 save()는 단순히 새 엔티티를 추가하는 메소드가 아닙니다.
+    * Transient 상태의 객체라면 EntityManager.persist()
+    * Detached 상태의 객체라면 EntityManager.merge()
+* Transient인지 Detached 인지 어떻게 판단 하는가?
+    * 엔티티의 @Id 프로퍼티를 찾는다. 해당 프로퍼티가 null이면 Transient 상태로 판단하고 id가 null이 아니면 Detached 상태로 판단한다.
+    * 엔티티가 Persistable 인터페이스를 구현하고 있다면 isNew() 메소드에 위임한다.
+    * JpaRepositoryFactory를 상속받는 클래스를 만들고 getEntityInfomration()을 오버라이딩해서 자신이 원하는 판단 로직을 구현할 수도 있습니다.
+* EntityManager.persist()
+    * https://docs.oracle.com/javaee/6/api/javax/persistence/EntityManager.html#persist(java.lang.Object)
+    * Persist() 메소드에 넘긴 그 엔티티 객체를 Persistent 상태로 변경합니다.
+    
+    ![32-1](./img/32-1.PNG)
+* EntityManager.merge()
+    * https://docs.oracle.com/javaee/6/api/javax/persistence/EntityManager.html#merge(java.lang.Object)
+    * Merge() 메소드에 넘긴 그 엔티티의 복사본을 만들고, 그 복사본을 다시 Persistent상태로 변경하고 그 복사본을 반환합니다.
+    
+    ![32-2](./img/32-2.PNG)
+    
+* sol : return 받은 객체를 사용해라! (그게 persistent 상태이다!)
+    * 이걸 알게된건 운이 좋은거다..ㅎㅎㅎ ㄳ
+    
+### 스프링 데이터 JPA: 쿼리 메소드
+* 쿼리 생성하기
+    * https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#jpa.query-methods.query-creation
+    * And, Or
+    * Is, Equals
+    * LessThan, LessThanEqual, GreaterThan, GreaterThanEqual
+    * After, Before
+    * IsNull, IsNotNull, NotNull
+    * Like, NotLike
+    * StartingWith, EndingWith, Containing
+    * OrderBy
+    * Not, In, NotIn
+    * True, False
+    * IgnoreCase
+* 쿼리 찾아쓰기
+    * 엔티티에 정의한 쿼리 찾아 사용하기 JPA Named 쿼리
+        * @NamedQuery
+        ```java
+        @NamedQuery(name = "Post.findByTitle", query = "SELECT p FROM Post AS p WHERE p.title = ?1")
+        ```
+        * @NamedNativeQuery
+    * 리포지토리 메소드에 정의한 쿼리 사용하기 -> 추천!
+        * @Query
+        * @Query(nativeQuery = true)
+
+### 스프링 데이터 JPA: 쿼리 메소드 Sort
+* 이전과 마찬가지로 Pageable이나 Sort를 매개변수로 사용할 수 있는데, @Query와 같이 사용할 때 제약 사항이 하나 있습니다.
+* Order by 절에서 함수를 호출하는 경우에는 Sort를 사용하지 못합니다. 그 경우에는 JpaSort.unsafe()를 사용 해야 합니다.
+    * Sort는 그 안에서 사용한 **프로퍼티** 또는 **alias** 가 엔티티에 없는 경우에는 예외가 발생합니다.
+    * JpaSort.unsafe()를 사용하면 함수 호출을 할 수 있습니다.
+        * JpaSort.unsafe(“LENGTH(firstname)”);
+
+###  스프링 데이터 JPA: Named Parameter과 SpEL
+* Named Parameter
+    * @Query에서 참조하는 매개변수를 ?1, ?2 이렇게 채번으로 참조하는게 아니라 이름으로 :title 이렇게 참조하는 방법은 다음과 같습니다.
+    ```java
+    @Query("SELECT p FROM Post AS p WHERE p.title = :title")
+    List<Post> findByTitle(@Param("title") String title, Sort sort);
+    ```
+* SpEL
+    * 스프링 표현 언어
+    * https://docs.spring.io/spring/docs/current/spring-framework-reference/core.html#expressions
+    * @Query에서 엔티티 이름을 #{#entityName} 으로 표현할 수 있습니다.
+    ```java
+    @Query("SELECT p FROM #{#entityName} AS p WHERE p.title = :title")
+    List<Post> findByTitle(@Param("title") String title, Sort sort);
+    ```
+### 스프링 데이터 JPA: Update 쿼리 메소드
+* 쿼리 생성하기
+    * find...
+    * count...
+    * delete...
+    * 흠.. update는 어떻게 하지?
+* Update 또는 Delete 쿼리 직접 정의하기
+    * @Modifying @Query
+    * 추천하진 않습니다
+```java
+@Modifying(clearAutomatically = true, flushAutomatically = true)
+@Query("UPDATE Post p SET p.title = ?2 WHERE p.id = ?1")
+int updateTitle(Long id, String title);
+```
