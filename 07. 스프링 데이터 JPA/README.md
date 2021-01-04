@@ -1137,3 +1137,195 @@ public void getPosts() throws Exception {
 @Query("UPDATE Post p SET p.title = ?2 WHERE p.id = ?1")
 int updateTitle(Long id, String title);
 ```
+
+### 스프링 데이터 JPA 7. EntityGraph
+* 쿼리 메소드마다 연관 관계의 Fetch 모드를 설정할 수 있다
+* @NamedEntityGraph
+    * @Entity에서 재사용 할 여러 엔티티 그룹을 정의할 때 사용
+* @EntityGraph
+    * @NamedEntityGraph에 정의되어 있는 엔티티 그룹을 사용 함
+    * 그래프 타입 설정 가능
+        * (기본값) FETCH: 설정한 엔티티 애트리뷰트는 EAGER 패치, 나머지는 LAZY 패치
+        * LOAD: 설정한 엔티티 애트리뷰트는 EAGER패치 나머지는 기본 패치 전략을 따름
+* 참고 : 연관관계 맵핑에서 SomethingToOne 이면 EAGER, SomethingToMany 이면 LAZY 페치 전략이 기본이다
+* EntityGraph를 사용한 필드에 대해서는 기본 페치 전략이 아닌 EAGER를 사용하도록 설정하는 것이다. 즉, 각각의 필드에 대해 페치 전략을 달리 사용하는 메소드를 repository에 정의할 때 사용한다. 예를 들어 Field1 은 LAZY, Field2는 EAGER로 설정되어 있을 때 기본적인 jpa repository가 제공하는 메소드를 사용하면 필드1은 LAZY, 필드2는 EAGER로 페치를 하겠지만 EntityGraph로 필드1을 설정하면 필드1,2 모두 EAGER로 페치한다
+* code
+```java
+@NamedEntityGraph(name = "Comment.post",
+		attributeNodes = @NamedAttributeNode("post"))
+@Entity
+public class Comment {
+	@Id
+	@GeneratedValue
+	private Long id;
+	private String comment;
+	@ManyToOne(fetch = FetchType.LAZY)
+	private Post post;
+
+	// getter, setter
+}
+public interface CommentRepository extends JpaRepository<Comment, Long> {
+	@EntityGraph(value = "Comment.post")
+	Optional<Comment> getById(Long id);
+}
+@RunWith(SpringRunner.class)
+@DataJpaTest
+public class CommentRepositoryTest {
+	@Autowired
+	CommentRepository commentRepository;
+
+	@Test
+	public void getComment() {
+		// This method gets Post entity directly
+		commentRepository.getById(1L);
+		// This method gets Post entity by using lazy 
+		commentRepository.findById(1L);
+	}
+}
+```
+
+### 스프링 데이터 JPA 8. Projection
+* 엔티티 일부 데이터만 가져오기
+* 인터페이스 기반 프로젝션
+    * Nested 프로젝션 가능
+    * Closed 프로젝션 (특정 필드만 추려서 가져옴)
+        * 쿼리를 최적화 할 수 있다. 가져오려는 애트리뷰트가 뭔지 알고 있으니까
+        * Java 8의 default 메소드를 사용해서 연산을 할 수 있다
+            * Open projection에서 @Value(SpEL)로 연산한 결과처럼 동일한 기능을 사용할 수 있다
+            * ex. default String getVotes() { return getUp() + " " + getDown(); }
+* Open 프로젝션 (모든 필드를 가져와서 추려냄)
+    * @Value(SpEL)을 사용해서 연산할 수 있다. 스프링 빈의 메소드도 호출 가능
+        * 여기서 정의한 string을 그대로 받아서 사용할 수 있다 ex. @Value("#{target.f1 + ' ' + target.f2")는 "f1 f2"를 리턴한다
+    * 쿼리를 최적화 할 수 없다. SpEL을 엔티티 대상으로 사용하기 때문에
+* 클래스 기반 프로젝션
+    * 인터페이스 기반 프로젝션과 동일한 기능(cloased, open projection)을 제공한다. 다만 작성할 코드가 더 많아진다.
+    * DTO
+    * 롬복 @Value로 코드를 줄일 수 있다
+* 다이나믹 프로젝션
+    * 프로젝션 용 메소드 하나만 정의하고 실제 프로젝션 타입은 타입 인자로 전달한다
+    * <T> List<T> findByPost_Id(Long id, Class<T> type);
+ 
+### 스프링 데이터 JPA 9. Specifications
+* 에릭 에반스의 책 DDD에서 언급하는 Specification 개념을 차용한 것으로 QueryDSL의 Predicate와 비슷합니다
+* 설정이 까다로움
+* 설정하는 방법
+    * https://docs.jboss.org/hibernate/stable/jpamodelgen/reference/en-US/html_single/
+    * 의존성 설정
+        * group : org.hibernate
+        * name : hibernate-jpamodelgen
+    * 플러그인 설정
+    * IDE에 애노테이션 처리기 설정
+    * 코딩 시작
+* 예제
+    * 정의하기
+```java
+public class CommentSpecs {
+	public static Specification<Comment> isBest() {
+		return (Specification<Comment>)
+			(root, query, builder ->
+				builder.isTrue(root.get(Comment_.best));
+	}
+
+	public static Specification<Comment> isGood() {
+		return (Specification<Comment>)
+			(root, query, builder ->
+				builder.greaterThanOrEqualTo(root.get((comment_.up), 10));
+	}
+}
+```
+* 사용하기
+```java
+@Test
+public void specs() {
+	// 기본 사용 방법
+	comments.findAll(CommentSpecs.isBest());
+	// 두 조건을 묶어서 사용
+	comments.findAll(CommentSpecs.isBest().or(CommentSpecs.isGood());
+	// Pagination 사용
+	comments.findAll(CommentSpecs.isBest().or(CommentSpecs.isGood(), PageRequest.of(0,10));
+}
+```
+
+### 스프링 데이터 JPA 10. Query by Example
+* QueryByExample은 필드 이름을 작성할 필요 없이(작성을 해야 하는 경우가 있음, ExampleMatcher.matching().withMatcher("fieldName",…)) 단순한 인터페이스를 통해 쿼리를 만드는 기능을 제공하는 사용자 친화적인 쿼리 기술입니다
+* Example = Probe + ExampleMatcher
+    * Probe는 필드에 어떤 값들을 가지고 있는 도메인 객체
+    * ExampleMatcher는 Probe에 들어있는 그 필드의 값들을 어떻게 쿼리할 데이터와 비교할지 정의한 것
+    * Example은 그 둘을 하나로 합친 것, 이걸로 쿼리를 함
+* 장점
+    * 별다른 코드 생성기나 애노테이션 처리기 필요 없음
+    * 도메인 객체 리팩토링을 해도 기존 쿼리가 깨질 걱정을 하지 않아도 됨(위에서 필드 이름을 작성해야 하는경우 여전히 쿼리가 깨질 수 있는 여지가 생김)
+    * 데이터 기술에 독립적인 API
+* 단점
+    * nested 또는 프로퍼티 그룹 제약 조건을 못 만든다
+    * 조건이 제한적이다. 문자열은 starts/contains/ends/regex가 가능하고 그밖에 property는 값이 정확히 일치해야 한다
+* QueryByExampleExecutor
+* https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#query-by-example 
+* 사용 방법
+```java
+@Test
+public void qbe() {
+	Comment probe = new Comment();
+	probe.setBest(true);
+
+	ExampleMatcher exampleMatcher = ExampleMatcher.matchingAny();
+	Example<Comment> example = Example.of(probe, exampleMatcher);
+	comments.findAll(example);
+}
+```
+
+* 이정도면 spring data JPA가 아니라 hibernate를 쓰는 정도의 장황한 코드가..
+### 스프링 데이터 JPA 11. 트랜잭션
+* 스프링 데이터 JPA가 제공하는 Repository의 모든 메소드에는 기본적으로 @Transactional이 적용되어 있습니다
+    * SimpleJpaRepository에 @Transactional이 전부 걸려있음
+* 스프링 @Transactional
+    * 클래스, 인터페이스, 메소드에 사용할 수 있으며, 메소드에 가장 가까운 애노테이션이 우선순위가 높다
+        * SimpleJpaRepository의 클래스에도 @Transactional이 설정되어 있고, readOnly=true이다. 각 메소드에는 다른 설정이 없는 @Transactional이 설정되어 있는데 이게 우선순위가 더 높다. (@Transactional을 설정하지 않은 메소드도 있긴 하다)
+    * https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/transaction/annotation/Transactional.html (설정 방법을 반드시 읽어볼 것)
+    * RuntimeException and Error가 발생했을 때 롤백을 실행하며, checked exception에는 롤백을 수행하지 않는게 기본이다. 
+    * 커스터마이징
+        * rollbackFor, noRollbackFor : 위의 기본 설정에서 롤백 설정을 할 수 있다
+        * transactionManager : 스프링 부트를 사용한다면 자동설정이 transactionManager라는 이름의 빈을 등록하여 별도 설정이 필요없다
+        * timeout : timeout 설정
+        * Isolation : DEFAULT의 경우 db의 기본 설정을 따른다
+        * Propagation : 트랜잭션을 어떻게 전파시킬 것인지. 동일 트랜잭션을 사용할 것인지/별도의 트랜잭션을 사용할 것인지 (nested transaction에 관한 내용)
+        * readOnly : 데이터의 변경이 없는 오퍼레이션이라면 성능 최적화를 위하여 가급적이면 true로 주는것이 좋다
+* JPA 구현체로 Hibernate를 이용할 때 트랜잭션을 readOnly를 사용하면 좋은점
+    * Flush 모드를 NEVER로 설정하여, Dirty checking(데이터의 변경 감지)을 하지 않도록 한다
+ 
+### 스프링 데이터 JPA 12. Auditing
+* 스프링 데이터 JPA의 Auditing
+```java
+@CreatedDate
+private Date created;
+@LastModifiedDate
+private Date updated;
+@CreatedBy
+@ManyToOne
+private Account createdBy;
+@LastModifiedBy
+@ManyToOne
+private Account updatedBy;
+```
+* 엔티티의 변경 시점에 언제, 누가 변경했는지에 대한 정보를 기록하는 기능
+* 아쉽지만 이 가능은 스프링 부트가 자동설정 해주지 않습니다
+    * 메인 애플리케이션 위에 @EnableJpaAuditing 추가
+    * 엔티티 클래스 위에 @EntityListeners(AuditingEntityListener.class) 추가 // 여기까지 하면 date는 업데이트 되지만 account는 업데이트를 할 수 없다
+    * AditorAware 구현체 만들기
+    * @EnableJpaAuditing에 AuditorAware 빈 이름 설정하기
+* JPA의 라이프 사이클 이벤트
+    * https://docs.jboss.org/hibernate/orm/4.0/hem/en-US/html/listeners.html 
+    * @PrePersist
+        * 엔티티에 설정하며, 엔티티가 호출되기 전 동작을 정의한다
+        * code
+	```java
+	// In the entity
+	@PrePersist
+	public void prePersist() {
+	// do Something
+	}
+	```
+* @PreUpdate
+* …
+ 
+### 스프링 데이터 JPA 마무리
